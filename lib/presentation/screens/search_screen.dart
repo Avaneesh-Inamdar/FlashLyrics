@@ -45,10 +45,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return;
     }
 
-    // Debounce: only search if query hasn't changed for 500ms
-    if (query != _lastQuery && query.length >= 2) {
+    // Debounce: only search if query hasn't changed for 300ms
+    if (query != _lastQuery && query.length >= 1) {
       _lastQuery = query;
-      Future.delayed(const Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted && _searchController.text.trim() == query) {
           _performSearch();
         }
@@ -121,10 +121,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: textPrimary),
-            onPressed: () => Navigator.pop(context),
-          ),
+          // Show back button only when used as a route (not a tab)
+          if (ModalRoute.of(context)?.isFirst != true)
+            IconButton(
+              icon: Icon(Icons.arrow_back_rounded, color: textPrimary),
+              onPressed: () {
+                if (mounted && Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+              },
+            ),
           const SizedBox(width: 8),
           Expanded(
             child: ClipRRect(

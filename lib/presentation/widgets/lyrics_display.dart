@@ -299,6 +299,9 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
   }
 
   Widget _buildPlainLyrics() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -308,10 +311,10 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
       ),
       child: SelectableText(
         widget.lyrics.plainLyrics,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 18,
           height: 2.0,
-          color: AppTheme.textPrimary,
+          color: textColor,
           letterSpacing: 0.3,
         ),
         textAlign: TextAlign.center,

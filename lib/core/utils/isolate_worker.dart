@@ -87,8 +87,9 @@ class JsonDecoder {
       map[key] = value;
       pos = _skipWhitespace(input, valuePos);
       if (input[pos] == '}') return (map, pos + 1);
-      if (input[pos] != ',')
+      if (input[pos] != ',') {
         throw FormatException('Expected "," or "}" at $pos');
+      }
       pos++;
     }
   }
@@ -107,8 +108,9 @@ class JsonDecoder {
       list.add(value);
       pos = _skipWhitespace(input, newPos);
       if (input[pos] == ']') return (list, pos + 1);
-      if (input[pos] != ',')
+      if (input[pos] != ',') {
         throw FormatException('Expected "," or "]" at $pos');
+      }
       pos++;
     }
   }
@@ -139,8 +141,9 @@ class JsonDecoder {
             buffer.write('\t');
             break;
           case 'u':
-            if (pos + 4 >= input.length)
+            if (pos + 4 >= input.length) {
               throw const FormatException('Invalid unicode');
+            }
             final hex = input.substring(pos + 1, pos + 5);
             buffer.writeCharCode(int.parse(hex, radix: 16));
             pos += 4;

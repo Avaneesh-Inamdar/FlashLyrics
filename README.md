@@ -37,16 +37,6 @@ The lyrics are cached locally so if you play the same song again, it loads insta
 - Only permission needed is notification access (to detect songs)
 - Everything is stored locally on your device
 
-## Known Issues
-
-- Some music apps don't expose song metadata properly
-- Hindi and non-English lyrics have limited availability
-- First install might need a phone restart if notification access doesn't activate
-
-## License
-
-MIT
-
 ---
 
 Built by Avaneesh

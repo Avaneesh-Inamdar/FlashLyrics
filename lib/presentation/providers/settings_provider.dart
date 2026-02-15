@@ -19,7 +19,14 @@ class AppSettings {
     this.autoRefresh = true,
     this.showSyncedLyrics = true,
     this.themeMode = ThemeModeOption.auto,
-    this.providerPriority = const ['lrclib', 'textyl', 'lyrics.ovh', 'lyrist'],
+    this.providerPriority = const [
+      'lrclib',
+      'textyl',
+      'chartlyrics',
+      'lyrics.ovh',
+      'lyrist',
+      'netease',
+    ],
   });
 
   /// Get theme mode display name
@@ -38,8 +45,10 @@ class AppSettings {
   static const Map<String, String> providerNames = {
     'lrclib': 'LRCLIB (Synced)',
     'textyl': 'Textyl (Synced)',
+    'chartlyrics': 'ChartLyrics',
     'lyrics.ovh': 'Lyrics.ovh',
     'lyrist': 'Lyrist',
+    'netease': 'NetEase Music',
   };
 
   AppSettings copyWith({

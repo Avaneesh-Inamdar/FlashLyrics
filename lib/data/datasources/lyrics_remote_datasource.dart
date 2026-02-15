@@ -13,8 +13,25 @@ class LyricsRemoteDataSource {
 
   /// Clean and normalize text for better search results
   /// Handles Hindi, special characters, and common metadata issues
-  String _normalizeText(String text) {
-    // Remove common suffixes and extras from song titles
+  String _normalizeText(String text, {bool isNonLatin = false}) {
+    // For non-Latin text (Hindi, Chinese, etc.), be more conservative with normalization
+    if (isNonLatin) {
+      // Just normalize quotes and collapse whitespace for non-Latin text
+      var cleaned = text
+          .replaceAll(RegExp(r'[""„]'), '"') // Normalize quotes
+          .replaceAll(
+            RegExp(
+              r'['
+              ']',
+            ),
+            "'",
+          ) // Normalize apostrophes
+          .trim();
+      cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+      return cleaned;
+    }
+
+    // Aggressive normalization for Latin text
     var cleaned = text
         .replaceAll(RegExp(r'\s*\(.*?\)\s*'), ' ') // Remove parentheses content
         .replaceAll(RegExp(r'\s*\[.*?\]\s*'), ' ') // Remove brackets content
@@ -65,8 +82,8 @@ class LyricsRemoteDataSource {
     final isNonLatin = _containsNonLatin('$artist$title');
 
     // Normalize inputs for better matching
-    final cleanArtist = _normalizeText(artist);
-    final cleanTitle = _normalizeText(title);
+    final cleanArtist = _normalizeText(artist, isNonLatin: isNonLatin);
+    final cleanTitle = _normalizeText(title, isNonLatin: isNonLatin);
     final songId = _generateSongId(artist, title);
     final errors = <String>[];
     final priority = providerPriority ?? ApiConstants.apiPriority;

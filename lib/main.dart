@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/providers.dart';
-import 'presentation/providers/settings_provider.dart';
 import 'presentation/screens/main_screen.dart';
 
 void main() async {

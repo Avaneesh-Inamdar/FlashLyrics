@@ -342,6 +342,14 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
     }
 
     // Inactive lines - faded, smaller text (Apple Music style)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pastLineColor = isDark
+        ? AppTheme.textHint.withValues(alpha: 0.4)
+        : AppTheme.lightTextHint.withValues(alpha: 0.6);
+    final upcomingLineColor = isDark
+        ? AppTheme.textSecondary.withValues(alpha: 0.8)
+        : AppTheme.lightTextSecondary.withValues(alpha: 0.8);
+
     return AnimatedOpacity(
       opacity: opacity,
       duration: const Duration(milliseconds: 250),
@@ -350,9 +358,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
         style: TextStyle(
           fontSize: inactiveFontSize,
           fontWeight: FontWeight.w500,
-          color: isPastLine
-              ? AppTheme.textHint.withValues(alpha: 0.4)
-              : AppTheme.textSecondary.withValues(alpha: 0.8),
+          color: isPastLine ? pastLineColor : upcomingLineColor,
           height: 1.4,
         ),
         textAlign: TextAlign.center,

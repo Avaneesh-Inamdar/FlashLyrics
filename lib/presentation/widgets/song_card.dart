@@ -91,7 +91,7 @@ class SongCard extends StatelessWidget {
                 ? Image.network(
                     song.artworkUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildArtPlaceholder(),
+                    errorBuilder: (_, _, _) => _buildArtPlaceholder(),
                   )
                 : _buildArtPlaceholder(),
           ),

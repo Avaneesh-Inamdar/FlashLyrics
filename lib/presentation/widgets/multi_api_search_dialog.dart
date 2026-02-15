@@ -5,7 +5,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/lyrics_model.dart';
 import '../providers/providers.dart';
-import '../providers/settings_provider.dart';
 
 /// Advanced dialog for searching lyrics across all APIs
 class MultiApiSearchDialog extends ConsumerStatefulWidget {

@@ -362,7 +362,7 @@ class SettingsScreen extends ConsumerWidget {
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
-      error: (_, __) => _buildTapTile(
+      error: (_, _) => _buildTapTile(
         context,
         icon: Icons.notifications_active_rounded,
         title: 'Notification Access',
