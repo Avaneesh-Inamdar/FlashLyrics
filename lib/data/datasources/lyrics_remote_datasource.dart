@@ -45,6 +45,14 @@ class LyricsRemoteDataSource {
     return cleaned;
   }
 
+  /// Check if text contains non-Latin characters (Hindi, Chinese, etc.)
+  bool _containsNonLatin(String text) {
+    // Match Devanagari (Hindi), Chinese, Japanese, Korean, Arabic, etc.
+    return RegExp(
+      r'[\u0900-\u097F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u0600-\u06FF]',
+    ).hasMatch(text);
+  }
+
   /// Fetch lyrics with intelligent fallback chain
   /// Prioritizes APIs that provide synced (LRC) lyrics
   /// [providerPriority] - Optional custom priority order for providers
@@ -53,6 +61,9 @@ class LyricsRemoteDataSource {
     String title, {
     List<String>? providerPriority,
   }) async {
+    // Check if this is a non-English song upfront
+    final isNonLatin = _containsNonLatin('$artist$title');
+
     // Normalize inputs for better matching
     final cleanArtist = _normalizeText(artist);
     final cleanTitle = _normalizeText(title);
@@ -67,19 +78,22 @@ class LyricsRemoteDataSource {
         if (result != null && result.plainLyrics.isNotEmpty) {
           return result;
         }
+        errors.add('$api: No lyrics found');
       } on DioException catch (e) {
         // Check for certificate errors
         if (e.type == DioExceptionType.badCertificate ||
             e.message?.contains('certificate') == true) {
-          errors.add('$api: Certificate error - server SSL expired');
+          errors.add('$api: SSL certificate expired');
         } else if (e.type == DioExceptionType.connectionError) {
           errors.add('$api: Connection failed');
+        } else if (e.response?.statusCode == 404) {
+          errors.add('$api: Not found');
         } else {
-          errors.add('$api: ${e.message ?? 'Unknown error'}');
+          errors.add('$api: Network error');
         }
         continue;
       } catch (e) {
-        errors.add('$api: ${e.toString()}');
+        errors.add('$api: Failed');
         continue;
       }
     }
@@ -104,16 +118,17 @@ class LyricsRemoteDataSource {
     }
 
     // All APIs failed - provide user-friendly error message
-    final isNonLatin = RegExp(r'[^\x00-\x7F]').hasMatch('$artist$title');
     if (isNonLatin) {
       throw LyricsNotFoundException(
         message:
-            'Lyrics not found for this song. Note: Hindi and other non-English lyrics may have limited availability. Try searching manually with romanized (English) spellings.',
+            'Lyrics not found. Hindi and non-English songs have limited availability. Try searching manually with English/romanized spellings.',
       );
     }
 
+    // Show simplified error for English songs
     throw LyricsNotFoundException(
-      message: 'Lyrics not found. Tried: ${errors.take(2).join(', ')}',
+      message:
+          'Lyrics not found for "$title" by "$artist". Try searching manually.',
     );
   }
 

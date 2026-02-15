@@ -320,8 +320,11 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
   }
 
   Widget _buildSyncedLyrics() {
+    // Dynamic height based on font size (larger fonts need more space)
+    final dynamicHeight = 400 + (_syncedFontSize - 14) * 8;
+
     return Container(
-      height: 450,
+      height: dynamicHeight.clamp(400.0, 600.0),
       decoration: BoxDecoration(
         gradient: AppTheme.cardGradient,
         borderRadius: BorderRadius.circular(24),

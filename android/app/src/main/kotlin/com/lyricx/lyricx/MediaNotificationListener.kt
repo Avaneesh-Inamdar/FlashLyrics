@@ -118,11 +118,15 @@ class MediaNotificationListener : NotificationListenerService() {
 
         // Reference to the service instance for refresh calls
         private var serviceInstance: MediaNotificationListener? = null
+        
+        // Flag to force notification on next check (ignores debounce)
+        private var forceNextNotification = false
 
         // Force refresh active sessions (called when Flutter reconnects)
         fun refreshActiveSessions() {
-            // Clear debounce to allow re-notification
+            // Clear debounce and force notification to allow re-notification
             serviceInstance?.lastNotifiedSong = null
+            forceNextNotification = true
             serviceInstance?.checkActiveSessions()
         }
     }
@@ -403,7 +407,8 @@ class MediaNotificationListener : NotificationListenerService() {
         val isSameSong = songKey == lastNotifiedSong
         
         // For same song, only notify if playback state changed or it's a fresh app connection
-        if (isSameSong && isPlaying == currentIsPlaying && mediaUpdateListener != null) {
+        // Always notify if forceNextNotification is set (happens when Flutter reconnects)
+        if (isSameSong && isPlaying == currentIsPlaying && mediaUpdateListener != null && !forceNextNotification) {
             // Same song, same playback state, skip to avoid spam
             // But still start position tracking if playing
             if (isPlaying) {
@@ -411,6 +416,9 @@ class MediaNotificationListener : NotificationListenerService() {
             }
             return
         }
+        
+        // Reset force flag after we use it
+        forceNextNotification = false
         lastNotifiedSong = songKey
         
         // Get friendly source name

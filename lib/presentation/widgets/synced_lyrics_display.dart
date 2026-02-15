@@ -33,9 +33,10 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
   final ScrollController _scrollController = ScrollController();
   late AnimationController _glowController;
 
-  // Dynamic item height based on font size
+  // Dynamic item height based on font size - needs enough space for multi-line text
   double get _itemHeight =>
-      widget.fontSize * 3.2; // ~3.2x font size for line height
+      widget.fontSize *
+      4.0; // 4x font size for adequate line height with wrapping
   static const double _viewportPadding = 150.0;
 
   @override
