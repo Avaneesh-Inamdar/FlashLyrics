@@ -91,7 +91,14 @@ class AppSettings {
           (json['providerPriority'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
-          const ['lrclib', 'textyl', 'lyrics.ovh', 'lyrist'],
+          const [
+            'lrclib',
+            'textyl',
+            'chartlyrics',
+            'lyrics.ovh',
+            'lyrist',
+            'netease',
+          ],
     );
   }
 

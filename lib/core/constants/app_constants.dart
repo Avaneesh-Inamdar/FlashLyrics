@@ -15,15 +15,27 @@ class ApiConstants {
   /// Lyrics.ovh alternative
   static const String lyristApi = 'https://lyrist.vercel.app/api';
 
+  /// ChartLyrics - Free API, no auth required
+  static const String chartLyricsApi = 'https://api.chartlyrics.com/apiv1';
+
+  /// NetEase Music - Free API (popular in Asia, supports Chinese)
+  static const String netEaseApi = 'https://music.163.com/api/search/get';
+
+  /// Genius Lyrics (requires auth token but has free tier)
+  static const String geniusSearchApi = 'https://api.genius.com/search';
+
   /// Happi.dev API (requires API key but has free tier)
   static const String happiApi = 'https://api.happi.dev/v1/music';
 
   /// Ordered list of APIs to try (priority order)
+  /// Prioritizes synced lyrics sources first
   static const List<String> apiPriority = [
-    'lrclib', // Best for synced lyrics
-    'textyl', // Good synced lyrics backup
+    'lrclib', // ⭐ Best for synced lyrics (LRC format)
+    'textyl', // ⭐ Good synced lyrics backup
+    'chartlyrics', // ⭐ Free, no auth, plain lyrics
     'lyrics.ovh', // Plain lyrics fallback
     'lyrist', // Additional fallback
+    'netease', // Supports Chinese/Asian songs
   ];
 
   /// Timeout durations

@@ -18,13 +18,17 @@ class LyricsRepositoryImpl implements LyricsRepository {
        _localDataSource = localDataSource;
 
   @override
-  Future<Lyrics> getLyrics(Song song) async {
+  Future<Lyrics> getLyrics(Song song, {List<String>? providerPriority}) async {
     // First check cache
     final cachedLyrics = _localDataSource.getCachedLyrics(song.id);
     if (cachedLyrics != null) {
       // If cached version exists but isn't synced, try to get synced version
       if (!cachedLyrics.isSynced) {
-        final syncedLyrics = await _trySyncedLyrics(song.artist, song.title);
+        final syncedLyrics = await _trySyncedLyrics(
+          song.artist,
+          song.title,
+          providerPriority: providerPriority,
+        );
         if (syncedLyrics != null) {
           await _localDataSource.cacheLyrics(syncedLyrics);
           return syncedLyrics;
@@ -34,12 +38,17 @@ class LyricsRepositoryImpl implements LyricsRepository {
     }
 
     // Try to get synced lyrics first (parallel fetch)
-    var lyrics = await _trySyncedLyrics(song.artist, song.title);
+    var lyrics = await _trySyncedLyrics(
+      song.artist,
+      song.title,
+      providerPriority: providerPriority,
+    );
 
     // Fall back to sequential fetch if parallel failed
     lyrics ??= await _remoteDataSource.fetchLyricsWithFallback(
       song.artist,
       song.title,
+      providerPriority: providerPriority,
     );
 
     // Cache the result
@@ -49,16 +58,28 @@ class LyricsRepositoryImpl implements LyricsRepository {
   }
 
   /// Try to fetch synced lyrics using parallel API calls
-  Future<LyricsModel?> _trySyncedLyrics(String artist, String title) async {
+  Future<LyricsModel?> _trySyncedLyrics(
+    String artist,
+    String title, {
+    List<String>? providerPriority,
+  }) async {
     try {
-      return await _remoteDataSource.fetchSyncedLyricsParallel(artist, title);
+      return await _remoteDataSource.fetchSyncedLyricsParallel(
+        artist,
+        title,
+        providerPriority: providerPriority,
+      );
     } catch (e) {
       return null;
     }
   }
 
   @override
-  Future<Lyrics> searchLyrics(String artist, String title) async {
+  Future<Lyrics> searchLyrics(
+    String artist,
+    String title, {
+    List<String>? providerPriority,
+  }) async {
     final songId = _generateSongId(artist, title);
 
     // First check cache
@@ -68,10 +89,18 @@ class LyricsRepositoryImpl implements LyricsRepository {
     }
 
     // Try parallel synced lyrics first
-    var lyrics = await _trySyncedLyrics(artist, title);
+    var lyrics = await _trySyncedLyrics(
+      artist,
+      title,
+      providerPriority: providerPriority,
+    );
 
     // Fall back to sequential fetch
-    lyrics ??= await _remoteDataSource.fetchLyricsWithFallback(artist, title);
+    lyrics ??= await _remoteDataSource.fetchLyricsWithFallback(
+      artist,
+      title,
+      providerPriority: providerPriority,
+    );
 
     // Cache the result
     await _localDataSource.cacheLyrics(lyrics);

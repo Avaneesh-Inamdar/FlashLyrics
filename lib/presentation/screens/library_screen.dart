@@ -221,9 +221,9 @@ class LibraryScreen extends ConsumerWidget {
     int index,
     bool isDark,
   ) {
-    final songParts = lyrics.songId.split('_');
-    final title = songParts.length > 1 ? songParts[1] : songParts[0];
-    final artist = songParts.isNotEmpty ? songParts[0] : 'Unknown';
+    // Use trackName and artistName from model if available, otherwise fallback to parsing
+    final title = lyrics.trackName ?? 'Unknown Song';
+    final artist = lyrics.artistName ?? 'Unknown Artist';
 
     final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
     final surfaceLight = isDark

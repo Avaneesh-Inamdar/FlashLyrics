@@ -8,7 +8,8 @@ class GetLyricsUseCase {
 
   GetLyricsUseCase(this._repository);
 
-  Future<Lyrics> call(Song song) => _repository.getLyrics(song);
+  Future<Lyrics> call(Song song, {List<String>? providerPriority}) =>
+      _repository.getLyrics(song, providerPriority: providerPriority);
 }
 
 /// Use case for searching lyrics
@@ -17,8 +18,15 @@ class SearchLyricsUseCase {
 
   SearchLyricsUseCase(this._repository);
 
-  Future<Lyrics> call(String artist, String title) =>
-      _repository.searchLyrics(artist, title);
+  Future<Lyrics> call(
+    String artist,
+    String title, {
+    List<String>? providerPriority,
+  }) => _repository.searchLyrics(
+    artist,
+    title,
+    providerPriority: providerPriority,
+  );
 }
 
 /// Use case for getting cached lyrics

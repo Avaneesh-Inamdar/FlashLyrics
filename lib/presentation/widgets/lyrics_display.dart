@@ -164,7 +164,7 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
                   _buildActionButton(
                     icon: Icons.share_rounded,
                     label: 'Share',
-                    onTap: () => _copyToClipboard(context),
+                    onTap: () => _shareToClipboard(context),
                   ),
                 ],
               ),
@@ -426,6 +426,30 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
             ),
             const SizedBox(width: 12),
             const Text('Lyrics copied to clipboard'),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _shareToClipboard(BuildContext context) {
+    final text = '${widget.lyrics.plainLyrics}\n\n— Shared via FlashLyrics';
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.share_rounded,
+              color: AppTheme.successColor,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            const Text('Lyrics ready to share!'),
           ],
         ),
         behavior: SnackBarBehavior.floating,

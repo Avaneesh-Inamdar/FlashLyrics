@@ -170,6 +170,10 @@ class LyricsRemoteDataSource {
         return await _fetchFromLyricsOvh(artist, title, songId);
       case 'lyrist':
         return await _fetchFromLyrist(artist, title, songId);
+      case 'chartlyrics':
+        return await _fetchFromChartLyrics(artist, title, songId);
+      case 'netease':
+        return await _fetchFromNetEase(artist, title, songId);
       default:
         return null;
     }
@@ -411,8 +415,9 @@ class LyricsRemoteDataSource {
   /// Returns the first successful result with synced lyrics
   Future<LyricsModel?> fetchSyncedLyricsParallel(
     String artist,
-    String title,
-  ) async {
+    String title, {
+    List<String>? providerPriority,
+  }) async {
     final songId = _generateSongId(artist, title);
 
     // Launch parallel requests to synced lyrics APIs
@@ -628,5 +633,161 @@ class LyricsRemoteDataSource {
     }
 
     return results;
+  }
+
+  /// Fetch from ChartLyrics - Free API, no authentication required
+  /// API: https://www.chartlyrics.com/api.aspx
+  Future<LyricsModel?> _fetchFromChartLyrics(
+    String artist,
+    String title,
+    String songId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.chartLyricsApi}/search',
+        queryParameters: {
+          'artist': artist.isEmpty ? ' ' : artist,
+          'song': title,
+        },
+        options: Options(
+          sendTimeout: ApiConstants.connectionTimeout,
+          receiveTimeout: ApiConstants.receiveTimeout,
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+
+        // ChartLyrics returns a list of results
+        final List<dynamic> results =
+            data['GetLyricsResult'] as List<dynamic>? ?? [];
+
+        if (results.isNotEmpty) {
+          final lyricData = results[0] as Map<String, dynamic>;
+          final lyricId = lyricData['LyricId'] as int?;
+
+          if (lyricId != null && lyricId > 0) {
+            // Fetch the actual lyrics using the lyric ID
+            final lyricResponse = await _dio.get(
+              '${ApiConstants.chartLyricsApi}/Lyric/$lyricId',
+              options: Options(
+                sendTimeout: ApiConstants.connectionTimeout,
+                receiveTimeout: ApiConstants.receiveTimeout,
+              ),
+            );
+
+            if (lyricResponse.statusCode == 200 && lyricResponse.data != null) {
+              final lyricContent = lyricResponse.data as Map<String, dynamic>;
+              final lyrics = lyricContent['Lyric'] as String? ?? '';
+
+              if (lyrics.isNotEmpty) {
+                return LyricsModel(
+                  id: '${songId}_chartlyrics_$lyricId',
+                  songId: songId,
+                  plainLyrics: lyrics,
+                  lrcLyrics: null,
+                  isSynced: false,
+                  source: 'ChartLyrics',
+                  fetchedAt: DateTime.now(),
+                  artistName: lyricData['Artist'] as String?,
+                  trackName: lyricData['Song'] as String?,
+                );
+              }
+            }
+          }
+        }
+      }
+      return null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      // ChartLyrics may 404 often, silently continue
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Fetch from NetEase Music - free API supporting Chinese and international songs
+  /// Works well for Asian music (Chinese, Japanese, Korean, etc.)
+  Future<LyricsModel?> _fetchFromNetEase(
+    String artist,
+    String title,
+    String songId,
+  ) async {
+    try {
+      // First search for the song
+      final searchResponse = await _dio.get(
+        'https://music.163.com/api/search/song',
+        queryParameters: {'keywords': '$artist $title', 'limit': 1},
+        options: Options(
+          sendTimeout: ApiConstants.connectionTimeout,
+          receiveTimeout: ApiConstants.receiveTimeout,
+          contentType: 'application/x-www-form-urlencoded',
+        ),
+      );
+
+      if (searchResponse.statusCode == 200 && searchResponse.data != null) {
+        final data = searchResponse.data as Map<String, dynamic>;
+        final result = data['result'] as Map<String, dynamic>?;
+        final songs = result?['songs'] as List<dynamic>? ?? [];
+
+        if (songs.isNotEmpty) {
+          final song = songs[0] as Map<String, dynamic>;
+          final songNetEaseId = song['id'] as int?;
+
+          if (songNetEaseId != null && songNetEaseId > 0) {
+            // Fetch lyrics using song ID
+            try {
+              final lyricsResponse = await _dio.get(
+                'https://music.163.com/api/song/lyric',
+                queryParameters: {'id': songNetEaseId, 'lv': -1},
+                options: Options(
+                  sendTimeout: ApiConstants.connectionTimeout,
+                  receiveTimeout: ApiConstants.receiveTimeout,
+                ),
+              );
+
+              if (lyricsResponse.statusCode == 200 &&
+                  lyricsResponse.data != null) {
+                final lyricsData = lyricsResponse.data as Map<String, dynamic>;
+                final lrc = lyricsData['lrc'] as Map<String, dynamic>?;
+                final lyrics = lrc?['lyric'] as String? ?? '';
+
+                if (lyrics.isNotEmpty) {
+                  final songName = song['name'] as String? ?? title;
+                  final artistName =
+                      ((song['artists'] as List<dynamic>?)?[0]
+                              as Map<dynamic, dynamic>?)?['name']
+                          as String? ??
+                      artist;
+
+                  return LyricsModel(
+                    id: '${songId}_netease_$songNetEaseId',
+                    songId: songId,
+                    plainLyrics: lyrics,
+                    lrcLyrics: null,
+                    isSynced: false,
+                    source: 'NetEase Music',
+                    fetchedAt: DateTime.now(),
+                    artistName: artistName,
+                    trackName: songName,
+                  );
+                }
+              }
+            } catch (e) {
+              // Lyrics fetch failed but search succeeded
+              return null;
+            }
+          }
+        }
+      }
+      return null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      // NetEase may be slow or blocked, return null gracefully
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 }

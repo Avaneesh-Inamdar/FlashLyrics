@@ -13,6 +13,10 @@ class MediaDetectionService {
   );
 
   StreamSubscription? _subscription;
+  Timer? _reconnectTimer;
+  Timer? _pollTimer;
+  bool _isListening = false;
+
   final StreamController<Song> _songController =
       StreamController<Song>.broadcast();
   final StreamController<bool> _playbackController =
@@ -151,17 +155,60 @@ class MediaDetectionService {
 
   /// Start listening for media updates
   void startListening() {
+    if (_isListening) return;
+    _isListening = true;
+
     _subscription?.cancel();
+    _reconnectTimer?.cancel();
+    _pollTimer?.cancel();
+
     _subscription = _eventChannel.receiveBroadcastStream().listen(
       _handleMediaEvent,
       onError: _handleError,
+      onDone: _handleStreamDone,
     );
+
+    // Start polling for current song every 3 seconds as backup
+    _startPolling();
+  }
+
+  void _handleStreamDone() {
+    if (kDebugMode)
+      debugPrint('Media event stream closed, attempting reconnect...');
+    _isListening = false;
+    _reconnectTimer?.cancel();
+
+    // Attempt reconnect after 2 seconds
+    _reconnectTimer = Timer(const Duration(seconds: 2), () {
+      if (kDebugMode) debugPrint('Reconnecting to media event stream...');
+      startListening();
+    });
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!_isListening) return;
+      try {
+        final song = await getCurrentPlayingSong();
+        if (song != null && song.id != _currentSong?.id) {
+          _songController.add(song);
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Polling error: $e');
+      }
+    });
   }
 
   /// Stop listening for media updates
   void stopListening() {
+    _isListening = false;
     _subscription?.cancel();
     _subscription = null;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   void _handleMediaEvent(dynamic event) {
@@ -256,6 +303,9 @@ class MediaDetectionService {
 
   void _handleError(dynamic error) {
     if (kDebugMode) debugPrint('Media detection error: $error');
+    // Trigger reconnection on error
+    _isListening = false;
+    _handleStreamDone();
   }
 
   /// Dispose resources
@@ -264,6 +314,8 @@ class MediaDetectionService {
     _songController.close();
     _playbackController.close();
     _positionController.close();
+    _reconnectTimer?.cancel();
+    _pollTimer?.cancel();
   }
 }
 

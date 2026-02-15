@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/song.dart';
 import '../../services/media_detection_service.dart';
@@ -131,6 +132,9 @@ class MediaNotifier extends StateNotifier<MediaState> {
   void _onSongDetected(Song song) {
     // Only update if song changed
     if (state.currentSong?.id != song.id) {
+      if (kDebugMode)
+        debugPrint('🎵 New song detected: ${song.title} by ${song.artist}');
+
       // IMPORTANT: Clear old lyrics first to prevent mixing
       _lyricsNotifier.clear();
 
@@ -143,6 +147,8 @@ class MediaNotifier extends StateNotifier<MediaState> {
       );
 
       // Auto-fetch lyrics for detected song
+      if (kDebugMode)
+        debugPrint('🔍 Initiating lyrics fetch for detected song...');
       _lyricsNotifier.setSong(song);
     }
   }

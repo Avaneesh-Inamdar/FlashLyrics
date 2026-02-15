@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -590,9 +591,49 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     try {
       final datasource = ref.read(lyricsRemoteDataSourceProvider);
+      List<LyricsModel> allResults = [];
 
-      // Search across all providers for better coverage
-      final allResults = await datasource.searchByQuery(query);
+      // Try to parse "artist - song" or "artist / song" format
+      String? artist;
+      String? title;
+
+      if (query.contains(' - ')) {
+        final parts = query.split(' - ');
+        if (parts.length == 2) {
+          artist = parts[0].trim();
+          title = parts[1].trim();
+        }
+      } else if (query.contains(' / ')) {
+        final parts = query.split(' / ');
+        if (parts.length == 2) {
+          artist = parts[0].trim();
+          title = parts[1].trim();
+        }
+      }
+
+      // If we parsed artist and title, search with them directly
+      if (artist != null &&
+          artist.isNotEmpty &&
+          title != null &&
+          title.isNotEmpty) {
+        try {
+          final artistTitleResults = await datasource.searchAllProviders(
+            artist,
+            title,
+          );
+          allResults = artistTitleResults.values
+              .whereType<LyricsModel>()
+              .where((m) => m.plainLyrics.isNotEmpty)
+              .toList();
+        } catch (e) {
+          if (kDebugMode) debugPrint('Direct artist/title search failed: $e');
+        }
+      }
+
+      // If no results from direct search or couldn't parse, try general query search
+      if (allResults.isEmpty) {
+        allResults = await datasource.searchByQuery(query);
+      }
 
       final results = allResults
           .map(
@@ -611,12 +652,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         setState(() {
           _results = results;
           _isSearching = false;
+          // Show helper message if no results found
+          if (_results.isEmpty) {
+            _error = 'No lyrics found. Try formatting: "Artist - Song Name"';
+          } else {
+            _error = null;
+          }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = 'Search error: ${e.toString()}';
           _isSearching = false;
         });
       }
