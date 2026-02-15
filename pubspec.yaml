@@ -1,0 +1,68 @@
+name: lyricx
+description: "High-performance Android lyrics app with automatic music detection"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
+  shimmer: ^3.0.0
+  
+  # State Management
+  flutter_riverpod: ^2.6.1
+  
+  # Network
+  dio: ^5.7.0
+  connectivity_plus: ^6.1.1
+  
+  # Local Storage - using shared_preferences for simpler caching
+  shared_preferences: ^2.3.3
+  path_provider: ^2.1.5
+  
+  # Media & Background
+  audio_service: ^0.18.17
+  just_audio: ^0.9.43
+  audio_session: ^0.1.25
+  
+  # Permissions
+  permission_handler: ^11.3.1
+  
+  # Utils
+  equatable: ^2.0.7
+  uuid: ^4.5.1
+  intl: ^0.20.1
+  url_launcher: ^6.3.1
+  
+  # LRC Parsing
+  lrc: ^1.0.0
+  
+  # JSON
+  json_annotation: ^4.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "icon/Icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#1a1a2e"
+  adaptive_icon_foreground: "icon/Icon.png"
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
