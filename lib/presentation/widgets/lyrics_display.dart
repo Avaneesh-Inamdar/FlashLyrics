@@ -317,7 +317,7 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
   }
 
   void _copyToClipboard(BuildContext context) {
-    final text = '${widget.lyrics.plainLyrics}\n\n— Sent via LyricX';
+    final text = '${widget.lyrics.plainLyrics}\n\n— Sent via FlashLyrics';
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

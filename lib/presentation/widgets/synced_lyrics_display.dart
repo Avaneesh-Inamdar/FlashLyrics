@@ -5,7 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/lrc_parser.dart';
 
-/// Widget to display synchronized lyrics with beautiful highlighting
+/// Widget to display synchronized lyrics with Apple Music-style smooth scrolling
 class SyncedLyricsDisplay extends StatefulWidget {
   final String lrcContent;
   final Duration currentPosition;
@@ -31,8 +31,9 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
   final ScrollController _scrollController = ScrollController();
   late AnimationController _glowController;
 
-  static const double _itemHeight = 56.0;
-  static const double _highlightedItemHeight = 72.0;
+  // Fixed item height for consistent scrolling (Apple Music style)
+  static const double _itemHeight = 64.0;
+  static const double _viewportPadding = 150.0;
 
   @override
   void initState() {
@@ -69,24 +70,39 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
   void _updateCurrentLine() {
     if (_parsedLrc == null) return;
     final newIndex = _parsedLrc!.getLineIndexAtTime(widget.currentPosition);
+
     if (newIndex != _currentLineIndex) {
       setState(() => _currentLineIndex = newIndex);
-      _scrollToCurrentLine();
+      _scrollToCurrentLine(animate: true);
     }
   }
 
-  void _scrollToCurrentLine() {
+  void _scrollToCurrentLine({bool animate = true}) {
     if (_currentLineIndex < 0 || !_scrollController.hasClients) return;
-    final targetOffset =
-        (_currentLineIndex * _itemHeight) -
-        (_scrollController.position.viewportDimension / 2) +
-        (_highlightedItemHeight / 2);
 
-    _scrollController.animateTo(
-      targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic,
+    // Calculate target offset to center the current line
+    final viewportHeight = _scrollController.position.viewportDimension;
+    final centerOffset = viewportHeight / 2 - _itemHeight / 2;
+
+    // Target offset puts current line in the center
+    final targetOffset =
+        (_currentLineIndex * _itemHeight) + _viewportPadding - centerOffset;
+
+    final clampedOffset = targetOffset.clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
     );
+
+    if (animate) {
+      // Smooth Apple Music-style animation
+      _scrollController.animateTo(
+        clampedOffset,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _scrollController.jumpTo(clampedOffset);
+    }
   }
 
   @override
@@ -128,7 +144,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
 
     return Stack(
       children: [
-        // Main lyrics list
+        // Main lyrics list with fixed item extent for smooth scrolling
         ShaderMask(
           shaderCallback: (bounds) => LinearGradient(
             begin: Alignment.topCenter,
@@ -139,14 +155,15 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
               Colors.white,
               Colors.transparent,
             ],
-            stops: const [0.0, 0.12, 0.88, 1.0],
+            stops: const [0.0, 0.15, 0.85, 1.0],
           ).createShader(bounds),
           blendMode: BlendMode.dstIn,
           child: ListView.builder(
             controller: _scrollController,
-            padding: const EdgeInsets.symmetric(vertical: 120),
+            padding: EdgeInsets.symmetric(vertical: _viewportPadding),
             physics: const BouncingScrollPhysics(),
             itemCount: _parsedLrc!.lines.length,
+            itemExtent: _itemHeight, // Fixed height for consistent scrolling
             itemBuilder: (context, index) => _buildLyricLine(index),
           ),
         ),
@@ -225,45 +242,51 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
     final isPastLine = index < _currentLineIndex;
     final distance = (index - _currentLineIndex).abs();
 
-    // Calculate opacity based on distance from current line
+    // Calculate opacity based on distance from current line (Apple Music style fade)
     double opacity = 1.0;
     if (!isCurrentLine) {
-      opacity = (1.0 - (distance * 0.15)).clamp(0.3, 0.8);
+      opacity = (1.0 - (distance * 0.12)).clamp(0.25, 0.7);
     }
+
+    // Scale factor for the current line (subtle zoom effect)
+    final scale = isCurrentLine ? 1.0 : 0.92;
 
     return GestureDetector(
       onTap: widget.onSeek != null
           ? () => widget.onSeek!(line.timestamp)
           : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: isCurrentLine ? 18 : 12,
-        ),
-        child: AnimatedBuilder(
-          animation: _glowController,
-          builder: (context, child) {
-            return Container(
-              decoration: isCurrentLine
-                  ? BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryColor.withValues(
-                            alpha: 0.15 + (_glowController.value * 0.1),
-                          ),
-                          blurRadius: 30,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    )
-                  : null,
-              child: child,
-            );
-          },
-          child: _buildLyricText(line, isCurrentLine, isPastLine, opacity),
+      child: SizedBox(
+        height: _itemHeight, // Fixed height for consistent scrolling
+        child: Center(
+          child: AnimatedScale(
+            scale: scale,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            child: AnimatedBuilder(
+              animation: _glowController,
+              builder: (context, child) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: isCurrentLine
+                      ? BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.12 + (_glowController.value * 0.08),
+                              ),
+                              blurRadius: 25,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        )
+                      : null,
+                  child: child,
+                );
+              },
+              child: _buildLyricText(line, isCurrentLine, isPastLine, opacity),
+            ),
+          ),
         ),
       ),
     );
@@ -289,37 +312,44 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
             child: Text(
               text,
               style: const TextStyle(
-                fontSize: 26,
+                fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
-                height: 1.4,
-                letterSpacing: 0.3,
+                height: 1.3,
+                letterSpacing: 0.2,
               ),
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           )
           .animate(onPlay: (c) => c.forward())
           .scale(
-            begin: const Offset(0.95, 0.95),
+            begin: const Offset(0.96, 0.96),
             end: const Offset(1.0, 1.0),
-            duration: 250.ms,
-            curve: Curves.easeOutBack,
+            duration: 280.ms,
+            curve: Curves.easeOutCubic,
           )
-          .fadeIn(duration: 200.ms);
+          .fadeIn(duration: 180.ms);
     }
 
-    return AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 200),
-      style: TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w500,
-        color: isPastLine
-            ? AppTheme.textHint.withValues(alpha: opacity * 0.6)
-            : AppTheme.textSecondary.withValues(alpha: opacity),
-        height: 1.5,
+    return AnimatedOpacity(
+      opacity: opacity,
+      duration: const Duration(milliseconds: 250),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: isPastLine
+              ? AppTheme.textHint.withValues(alpha: 0.5)
+              : AppTheme.textSecondary,
+          height: 1.4,
+        ),
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
-      textAlign: TextAlign.center,
-      child: Text(text, textAlign: TextAlign.center),
     );
   }
 }

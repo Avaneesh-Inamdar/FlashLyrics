@@ -28,14 +28,14 @@ void main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
       ],
-      child: const LyricXApp(),
+      child: const FlashLyricsApp(),
     ),
   );
 }
 
 /// Main app widget
-class LyricXApp extends ConsumerWidget {
-  const LyricXApp({super.key});
+class FlashLyricsApp extends ConsumerWidget {
+  const FlashLyricsApp({super.key});
 
   ThemeMode _getThemeMode(ThemeModeOption option) {
     switch (option) {
@@ -74,7 +74,7 @@ class LyricXApp extends ConsumerWidget {
     );
 
     return MaterialApp(
-      title: 'LyricX',
+      title: 'FlashLyrics',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

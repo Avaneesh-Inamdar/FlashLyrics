@@ -69,7 +69,7 @@ class PermissionCard extends StatelessWidget {
               const SizedBox(height: 14),
               // Description
               const Text(
-                'LyricX needs notification access to detect songs from Spotify, YouTube Music, and other apps.',
+                'FlashLyrics needs notification access to detect songs from Spotify, YouTube Music, and other apps.',
                 style: TextStyle(
                   fontSize: 15,
                   color: AppTheme.textSecondary,

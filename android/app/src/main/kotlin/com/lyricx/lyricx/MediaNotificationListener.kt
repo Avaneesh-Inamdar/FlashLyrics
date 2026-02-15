@@ -106,6 +106,16 @@ class MediaNotificationListener : NotificationListenerService() {
                 "isPlaying" to currentIsPlaying
             )
         }
+
+        // Reference to the service instance for refresh calls
+        private var serviceInstance: MediaNotificationListener? = null
+
+        // Force refresh active sessions (called when Flutter reconnects)
+        fun refreshActiveSessions() {
+            // Clear debounce to allow re-notification
+            serviceInstance?.lastNotifiedSong = null
+            serviceInstance?.checkActiveSessions()
+        }
     }
     
     private var mediaSessionManager: MediaSessionManager? = null
@@ -122,6 +132,7 @@ class MediaNotificationListener : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
+        serviceInstance = this
         Log.d(TAG, "MediaNotificationListener created")
         initializeMediaSessionManager()
     }
@@ -129,6 +140,7 @@ class MediaNotificationListener : NotificationListenerService() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        serviceInstance = null
         cleanupControllers()
         Log.d(TAG, "MediaNotificationListener destroyed")
     }

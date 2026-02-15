@@ -103,6 +103,8 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        // Force a session check when Flutter starts listening
+        MediaNotificationListener.refreshActiveSessions()
     }
     
     private fun isNotificationAccessEnabled(): Boolean {

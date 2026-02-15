@@ -56,7 +56,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             shaderCallback: (bounds) =>
                 AppTheme.primaryGradient.createShader(bounds),
             child: const Text(
-              'LyricX',
+              'FlashLyrics',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: Colors.white,

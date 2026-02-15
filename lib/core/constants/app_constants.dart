@@ -39,7 +39,7 @@ class ApiConstants {
 class AppConstants {
   AppConstants._();
 
-  static const String appName = 'LyricX';
+  static const String appName = 'FlashLyrics';
   static const String appVersion = '1.0.0';
 
   /// Cache keys

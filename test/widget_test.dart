@@ -8,7 +8,7 @@ import 'package:lyricx/core/utils/lrc_parser.dart';
 import 'package:lyricx/core/utils/helpers.dart';
 
 void main() {
-  group('LyricX App Tests', () {
+  group('FlashLyrics App Tests', () {
     testWidgets('App smoke test - starts with title', (
       WidgetTester tester,
     ) async {
@@ -17,12 +17,12 @@ void main() {
 
       // Build our app and trigger a frame
       await tester.pumpWidget(
-        ProviderScope(overrides: [], child: const LyricXApp()),
+        ProviderScope(overrides: [], child: const FlashLyricsApp()),
       );
       await tester.pump();
 
       // Verify that the app starts with a title
-      expect(find.text('LyricX'), findsOneWidget);
+      expect(find.text('FlashLyrics'), findsOneWidget);
     });
   });
 
