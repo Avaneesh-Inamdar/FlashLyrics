@@ -37,11 +37,6 @@ The lyrics are cached locally so if you play the same song again, it loads insta
 - Only permission needed is notification access (to detect songs)
 - Everything is stored locally on your device
 
-
-## License
-
-MIT
-
 ---
 
 Built by Avaneesh
