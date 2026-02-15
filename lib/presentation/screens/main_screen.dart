@@ -1,23 +1,23 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
+import '../providers/providers.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 
 /// Main navigation screen with custom bottom navigation bar
-class MainScreen extends StatefulWidget {
+class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  ConsumerState<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
-
+class _MainScreenState extends ConsumerState<MainScreen> {
   final List<Widget> _screens = const [
     HomeScreen(),
     SearchScreen(),
@@ -28,6 +28,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentIndex = ref.watch(tabIndexProvider);
 
     return Scaffold(
       extendBody: true,
@@ -36,13 +37,13 @@ class _MainScreenState extends State<MainScreen> {
         transitionBuilder: (child, animation) {
           return FadeTransition(opacity: animation, child: child);
         },
-        child: _screens[_currentIndex],
+        child: _screens[currentIndex],
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(isDark),
+      bottomNavigationBar: _buildBottomNavigationBar(isDark, currentIndex),
     );
   }
 
-  Widget _buildBottomNavigationBar(bool isDark) {
+  Widget _buildBottomNavigationBar(bool isDark, int currentIndex) {
     final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
     final surfaceLight = isDark
         ? AppTheme.surfaceLight
@@ -87,24 +88,28 @@ class _MainScreenState extends State<MainScreen> {
                   icon: Icons.home_rounded,
                   label: 'Home',
                   textHint: textHint,
+                  currentIndex: currentIndex,
                 ),
                 _buildNavItem(
                   index: 1,
                   icon: Icons.search_rounded,
                   label: 'Search',
                   textHint: textHint,
+                  currentIndex: currentIndex,
                 ),
                 _buildNavItem(
                   index: 2,
                   icon: Icons.library_music_rounded,
                   label: 'Library',
                   textHint: textHint,
+                  currentIndex: currentIndex,
                 ),
                 _buildNavItem(
                   index: 3,
                   icon: Icons.settings_rounded,
                   label: 'Settings',
                   textHint: textHint,
+                  currentIndex: currentIndex,
                 ),
               ],
             ),
@@ -124,11 +129,12 @@ class _MainScreenState extends State<MainScreen> {
     required IconData icon,
     required String label,
     required Color textHint,
+    required int currentIndex,
   }) {
-    final isSelected = _currentIndex == index;
+    final isSelected = currentIndex == index;
 
     return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () => ref.read(tabIndexProvider.notifier).setIndex(index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),

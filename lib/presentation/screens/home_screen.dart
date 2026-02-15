@@ -132,6 +132,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildBody(LyricsState lyricsState, MediaState mediaState) {
+    // If we have lyrics from search, show them regardless of permission status
+    if (lyricsState.currentSong != null) {
+      return SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            SongCard(song: lyricsState.currentSong!),
+            const SizedBox(height: 16),
+            if (lyricsState.lyrics != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: LyricsDisplay(
+                  lyrics: lyricsState.lyrics!,
+                  currentPosition: mediaState.currentPosition,
+                  isPlaying: mediaState.isPlaying,
+                ),
+              )
+            else
+              _buildNoLyricsState(),
+            const SizedBox(height: 40),
+          ],
+        ),
+      );
+    }
+
     if (!mediaState.hasPermission) {
       return _buildPermissionRequest(mediaState);
     }
@@ -144,33 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return _buildErrorState(lyricsState.error!);
     }
 
-    if (lyricsState.currentSong == null) {
-      return _buildEmptyState(mediaState);
-    }
-
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 8),
-          SongCard(song: lyricsState.currentSong!),
-          const SizedBox(height: 16),
-          if (lyricsState.lyrics != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: LyricsDisplay(
-                lyrics: lyricsState.lyrics!,
-                currentPosition: mediaState.currentPosition,
-                isPlaying: mediaState.isPlaying,
-              ),
-            )
-          else
-            _buildNoLyricsState(),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
+    return _buildEmptyState(mediaState);
   }
 
   Widget _buildLoadingState() {

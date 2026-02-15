@@ -116,3 +116,25 @@ final searchCachedLyricsUseCaseProvider = Provider<SearchCachedLyricsUseCase>((
   final repository = ref.watch(lyricsRepositoryProvider);
   return SearchCachedLyricsUseCase(repository);
 });
+
+/// Tab index state notifier for controlling bottom navigation
+class TabIndexNotifier extends StateNotifier<int> {
+  TabIndexNotifier() : super(0);
+
+  void setIndex(int index) {
+    state = index;
+  }
+
+  void goToHome() {
+    state = 0;
+  }
+
+  void goToSearch() {
+    state = 1;
+  }
+}
+
+/// Tab index provider for bottom navigation
+final tabIndexProvider = StateNotifierProvider<TabIndexNotifier, int>((ref) {
+  return TabIndexNotifier();
+});

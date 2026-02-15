@@ -469,4 +469,164 @@ class LyricsRemoteDataSource {
 
     return buffer.toString().trim();
   }
+
+  /// Search across all providers for lyrics using a free-form query
+  /// Combines LRCLIB search with direct fetches from other APIs
+  Future<List<LyricsModel>> searchByQuery(String query) async {
+    final results = <LyricsModel>[];
+    final seenIds = <String>{};
+
+    // 1. Search LRCLIB (proper search API)
+    try {
+      final lrclibResults = await searchLrclib(query);
+      for (final result in lrclibResults) {
+        if (!seenIds.contains(result.songId)) {
+          seenIds.add(result.songId);
+          results.add(result);
+        }
+      }
+    } catch (_) {}
+
+    // 2. Try to parse query as "artist - title" or "title by artist"
+    String? guessedArtist;
+    String? guessedTitle;
+
+    // Try "artist - title" format
+    if (query.contains(' - ')) {
+      final parts = query.split(' - ');
+      if (parts.length == 2) {
+        guessedArtist = parts[0].trim();
+        guessedTitle = parts[1].trim();
+      }
+    }
+    // Try "title by artist" format
+    else if (query.toLowerCase().contains(' by ')) {
+      final byIndex = query.toLowerCase().lastIndexOf(' by ');
+      guessedTitle = query.substring(0, byIndex).trim();
+      guessedArtist = query.substring(byIndex + 4).trim();
+    }
+
+    // 3. If we have artist/title, try other providers
+    if (guessedArtist != null && guessedTitle != null) {
+      final songId = _generateSongId(guessedArtist, guessedTitle);
+
+      // Try Textyl
+      try {
+        final textylResult = await _fetchFromTextyl(
+          guessedArtist,
+          guessedTitle,
+          songId,
+        );
+        if (textylResult != null &&
+            textylResult.plainLyrics.isNotEmpty &&
+            !seenIds.contains(textylResult.songId)) {
+          seenIds.add(textylResult.songId);
+          results.add(
+            LyricsModel(
+              id: textylResult.id,
+              songId: textylResult.songId,
+              plainLyrics: textylResult.plainLyrics,
+              lrcLyrics: textylResult.lrcLyrics,
+              isSynced: textylResult.isSynced,
+              source: 'Textyl',
+              fetchedAt: textylResult.fetchedAt,
+              artistName: guessedArtist,
+              trackName: guessedTitle,
+            ),
+          );
+        }
+      } catch (_) {}
+
+      // Try lyrics.ovh
+      try {
+        final ovhResult = await _fetchFromLyricsOvh(
+          guessedArtist,
+          guessedTitle,
+          songId,
+        );
+        if (ovhResult != null &&
+            ovhResult.plainLyrics.isNotEmpty &&
+            !seenIds.contains(ovhResult.songId)) {
+          seenIds.add(ovhResult.songId);
+          results.add(
+            LyricsModel(
+              id: ovhResult.id,
+              songId: ovhResult.songId,
+              plainLyrics: ovhResult.plainLyrics,
+              lrcLyrics: ovhResult.lrcLyrics,
+              isSynced: false,
+              source: 'lyrics.ovh',
+              fetchedAt: ovhResult.fetchedAt,
+              artistName: guessedArtist,
+              trackName: guessedTitle,
+            ),
+          );
+        }
+      } catch (_) {}
+
+      // Try Lyrist
+      try {
+        final lyristResult = await _fetchFromLyrist(
+          guessedArtist,
+          guessedTitle,
+          songId,
+        );
+        if (lyristResult != null &&
+            lyristResult.plainLyrics.isNotEmpty &&
+            !seenIds.contains(lyristResult.songId)) {
+          seenIds.add(lyristResult.songId);
+          results.add(
+            LyricsModel(
+              id: lyristResult.id,
+              songId: lyristResult.songId,
+              plainLyrics: lyristResult.plainLyrics,
+              lrcLyrics: lyristResult.lrcLyrics,
+              isSynced: false,
+              source: 'Lyrist',
+              fetchedAt: lyristResult.fetchedAt,
+              artistName: guessedArtist,
+              trackName: guessedTitle,
+            ),
+          );
+        }
+      } catch (_) {}
+    }
+
+    // 4. Also try query as just a title (common search pattern)
+    if (results.isEmpty) {
+      final songId = _generateSongId('', query);
+
+      // Try searching with query as title and various common artist patterns
+      for (final provider in ['textyl', 'lyrics.ovh', 'lyrist']) {
+        try {
+          LyricsModel? result;
+          if (provider == 'textyl') {
+            // Textyl takes a combined query
+            result = await _fetchFromTextyl('', query, songId);
+          }
+          if (result != null &&
+              result.plainLyrics.isNotEmpty &&
+              !seenIds.contains(result.songId)) {
+            seenIds.add(result.songId);
+            results.add(
+              LyricsModel(
+                id: result.id,
+                songId: result.songId,
+                plainLyrics: result.plainLyrics,
+                lrcLyrics: result.lrcLyrics,
+                isSynced: result.isSynced,
+                source: 'Textyl',
+                fetchedAt: result.fetchedAt,
+                artistName: result.artistName,
+                trackName: query,
+              ),
+            );
+            break; // Found a result
+          }
+        } catch (_) {}
+      }
+    }
+
+    return results;
+  }
 }

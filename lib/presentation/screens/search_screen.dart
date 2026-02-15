@@ -5,7 +5,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/lyrics_model.dart';
 import '../providers/providers.dart';
-import '../providers/lyrics_provider.dart';
 
 /// Search screen with simplified song name input and visual results
 class SearchScreen extends ConsumerStatefulWidget {
@@ -592,10 +591,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     try {
       final datasource = ref.read(lyricsRemoteDataSourceProvider);
 
-      // Search LRCLIB (it has a search endpoint)
-      final lrclibResults = await datasource.searchLrclib(query);
+      // Search across all providers for better coverage
+      final allResults = await datasource.searchByQuery(query);
 
-      final results = lrclibResults
+      final results = allResults
           .map(
             (model) => SearchResult(
               title: model.trackName ?? 'Unknown Song',
@@ -627,7 +626,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   void _selectResult(SearchResult result) {
     // Use the lyrics
     ref.read(lyricsNotifierProvider.notifier).setLyricsFromModel(result.lyrics);
-    Navigator.pop(context);
+
+    // Navigate to home: either pop if this is a pushed route, or switch tab
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      // We're on the search tab in bottom nav, switch to home tab
+      ref.read(tabIndexProvider.notifier).goToHome();
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
