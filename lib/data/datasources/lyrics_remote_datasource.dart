@@ -11,6 +11,40 @@ class LyricsRemoteDataSource {
 
   LyricsRemoteDataSource(this._dio);
 
+  /// Clean and normalize text for better search results
+  /// Handles Hindi, special characters, and common metadata issues
+  String _normalizeText(String text) {
+    // Remove common suffixes and extras from song titles
+    var cleaned = text
+        .replaceAll(RegExp(r'\s*\(.*?\)\s*'), ' ') // Remove parentheses content
+        .replaceAll(RegExp(r'\s*\[.*?\]\s*'), ' ') // Remove brackets content
+        .replaceAll(
+          RegExp(
+            r'\s*-\s*(Official|Audio|Video|Lyrics|HD|HQ|4K).*',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceAll(
+          RegExp(r'\s*\|\s*.*$'),
+          '',
+        ) // Remove pipe and everything after
+        .replaceAll(RegExp(r'[""„]'), '"') // Normalize quotes
+        .replaceAll(
+          RegExp(
+            r'['
+            ']',
+          ),
+          "'",
+        ) // Normalize apostrophes
+        .trim();
+
+    // Collapse multiple whitespace
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+
+    return cleaned;
+  }
+
   /// Fetch lyrics with intelligent fallback chain
   /// Prioritizes APIs that provide synced (LRC) lyrics
   /// [providerPriority] - Optional custom priority order for providers
@@ -19,26 +53,67 @@ class LyricsRemoteDataSource {
     String title, {
     List<String>? providerPriority,
   }) async {
+    // Normalize inputs for better matching
+    final cleanArtist = _normalizeText(artist);
+    final cleanTitle = _normalizeText(title);
     final songId = _generateSongId(artist, title);
     final errors = <String>[];
     final priority = providerPriority ?? ApiConstants.apiPriority;
 
-    // Try each API in priority order
+    // Try each API in priority order - first with original text
     for (final api in priority) {
       try {
         final result = await _fetchFromApi(api, artist, title, songId);
         if (result != null && result.plainLyrics.isNotEmpty) {
           return result;
         }
+      } on DioException catch (e) {
+        // Check for certificate errors
+        if (e.type == DioExceptionType.badCertificate ||
+            e.message?.contains('certificate') == true) {
+          errors.add('$api: Certificate error - server SSL expired');
+        } else if (e.type == DioExceptionType.connectionError) {
+          errors.add('$api: Connection failed');
+        } else {
+          errors.add('$api: ${e.message ?? 'Unknown error'}');
+        }
+        continue;
       } catch (e) {
         errors.add('$api: ${e.toString()}');
         continue;
       }
     }
 
-    // All APIs failed
+    // If no results, try with cleaned/normalized text (helps for Hindi/non-English)
+    if (cleanArtist != artist || cleanTitle != title) {
+      for (final api in priority) {
+        try {
+          final result = await _fetchFromApi(
+            api,
+            cleanArtist,
+            cleanTitle,
+            songId,
+          );
+          if (result != null && result.plainLyrics.isNotEmpty) {
+            return result;
+          }
+        } catch (e) {
+          continue; // Silently continue, we already recorded errors above
+        }
+      }
+    }
+
+    // All APIs failed - provide user-friendly error message
+    final isNonLatin = RegExp(r'[^\x00-\x7F]').hasMatch('$artist$title');
+    if (isNonLatin) {
+      throw LyricsNotFoundException(
+        message:
+            'Lyrics not found for this song. Note: Hindi and other non-English lyrics may have limited availability. Try searching manually with romanized (English) spellings.',
+      );
+    }
+
     throw LyricsNotFoundException(
-      message: 'Lyrics not found. Tried: ${errors.join(', ')}',
+      message: 'Lyrics not found. Tried: ${errors.take(2).join(', ')}',
     );
   }
 

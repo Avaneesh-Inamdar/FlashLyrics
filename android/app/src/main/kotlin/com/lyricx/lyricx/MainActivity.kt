@@ -79,7 +79,8 @@ class MainActivity : FlutterActivity() {
                 artworkUrl: String?,
                 duration: Long,
                 source: String?,
-                isPlaying: Boolean
+                isPlaying: Boolean,
+                position: Long
             ) {
                 runOnUiThread {
                     eventSink?.success(mapOf(
@@ -90,6 +91,18 @@ class MainActivity : FlutterActivity() {
                         "artworkUrl" to (artworkUrl ?: ""),
                         "duration" to duration,
                         "source" to (source ?: "Unknown"),
+                        "isPlaying" to isPlaying,
+                        "position" to position
+                    ))
+                }
+            }
+            
+            override fun onPositionUpdate(position: Long, duration: Long, isPlaying: Boolean) {
+                runOnUiThread {
+                    eventSink?.success(mapOf(
+                        "type" to "position_update",
+                        "position" to position,
+                        "duration" to duration,
                         "isPlaying" to isPlaying
                     ))
                 }

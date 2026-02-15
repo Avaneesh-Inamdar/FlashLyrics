@@ -12,6 +12,8 @@ class MediaState {
   final Song? currentSong;
   final bool isPlaying;
   final String? error;
+  final Duration currentPosition;
+  final Duration currentDuration;
 
   const MediaState({
     this.hasPermission = false,
@@ -20,6 +22,8 @@ class MediaState {
     this.currentSong,
     this.isPlaying = false,
     this.error,
+    this.currentPosition = Duration.zero,
+    this.currentDuration = Duration.zero,
   });
 
   MediaState copyWith({
@@ -27,16 +31,21 @@ class MediaState {
     bool? isServiceRunning,
     bool? isListening,
     Song? currentSong,
+    bool? clearSong,
     bool? isPlaying,
     String? error,
+    Duration? currentPosition,
+    Duration? currentDuration,
   }) {
     return MediaState(
       hasPermission: hasPermission ?? this.hasPermission,
       isServiceRunning: isServiceRunning ?? this.isServiceRunning,
       isListening: isListening ?? this.isListening,
-      currentSong: currentSong ?? this.currentSong,
+      currentSong: clearSong == true ? null : (currentSong ?? this.currentSong),
       isPlaying: isPlaying ?? this.isPlaying,
       error: error,
+      currentPosition: currentPosition ?? this.currentPosition,
+      currentDuration: currentDuration ?? this.currentDuration,
     );
   }
 }
@@ -47,6 +56,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
   final LyricsNotifier _lyricsNotifier;
   StreamSubscription? _songSubscription;
   StreamSubscription? _playbackSubscription;
+  StreamSubscription? _positionSubscription;
 
   MediaNotifier({
     required MediaDetectionService service,
@@ -92,12 +102,20 @@ class MediaNotifier extends StateNotifier<MediaState> {
     _playbackSubscription?.cancel();
     _playbackSubscription = _service.playbackStream.listen(_onPlaybackChanged);
 
+    _positionSubscription?.cancel();
+    _positionSubscription = _service.positionStream.listen(_onPositionUpdate);
+
     state = state.copyWith(isListening: true);
 
     // Try to get the currently playing song on startup
     final currentSong = await _service.getCurrentPlayingSong();
     if (currentSong != null) {
       _onSongDetected(currentSong);
+      // Get initial position
+      state = state.copyWith(
+        currentPosition: _service.currentPosition,
+        currentDuration: _service.currentDuration,
+      );
     }
   }
 
@@ -106,13 +124,24 @@ class MediaNotifier extends StateNotifier<MediaState> {
     _service.stopListening();
     _songSubscription?.cancel();
     _playbackSubscription?.cancel();
+    _positionSubscription?.cancel();
     state = state.copyWith(isListening: false);
   }
 
   void _onSongDetected(Song song) {
     // Only update if song changed
     if (state.currentSong?.id != song.id) {
-      state = state.copyWith(currentSong: song, isPlaying: true);
+      // IMPORTANT: Clear old lyrics first to prevent mixing
+      _lyricsNotifier.clear();
+
+      // Reset position for new song
+      state = state.copyWith(
+        currentSong: song,
+        isPlaying: true,
+        currentPosition: Duration.zero,
+        currentDuration: song.duration ?? Duration.zero,
+      );
+
       // Auto-fetch lyrics for detected song
       _lyricsNotifier.setSong(song);
     }
@@ -120,6 +149,14 @@ class MediaNotifier extends StateNotifier<MediaState> {
 
   void _onPlaybackChanged(bool isPlaying) {
     state = state.copyWith(isPlaying: isPlaying);
+  }
+
+  void _onPositionUpdate(PlaybackPosition position) {
+    state = state.copyWith(
+      currentPosition: position.position,
+      currentDuration: position.duration,
+      isPlaying: position.isPlaying,
+    );
   }
 
   @override

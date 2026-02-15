@@ -30,6 +30,8 @@ class LyricsDisplay extends StatefulWidget {
 
 class _LyricsDisplayState extends State<LyricsDisplay> {
   bool _showSyncedLyrics = true;
+  double _syncedFontSize = 22.0; // Default size for synced lyrics
+  bool _showSizeSlider = false;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +45,9 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
       children: [
         // Actions row
         if (widget.showActions) _buildActionsRow(context, hasSyncedLyrics),
+        // Font size slider (only for synced lyrics)
+        if (hasSyncedLyrics && _showSyncedLyrics && _showSizeSlider)
+          _buildFontSizeSlider(),
         const SizedBox(height: 16),
         // Lyrics content - show synced if available and toggle is on
         if (hasSyncedLyrics && _showSyncedLyrics)
@@ -54,6 +59,61 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
         _buildSourceInfo(context),
       ],
     );
+  }
+
+  Widget _buildFontSizeSlider() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.surfaceLight.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.text_fields, size: 18, color: AppTheme.textSecondary),
+          const SizedBox(width: 12),
+          Text(
+            'Aa',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textHint,
+            ),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: AppTheme.primaryColor,
+                inactiveTrackColor: AppTheme.surfaceLight,
+                thumbColor: AppTheme.primaryLight,
+                overlayColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+              ),
+              child: Slider(
+                value: _syncedFontSize,
+                min: 14,
+                max: 32,
+                divisions: 6,
+                onChanged: (value) {
+                  setState(() => _syncedFontSize = value);
+                },
+              ),
+            ),
+          ),
+          Text(
+            'Aa',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.1, end: 0);
   }
 
   Widget _buildActionsRow(BuildContext context, bool hasSyncedLyrics) {
@@ -81,6 +141,20 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
               // Action buttons
               Row(
                 children: [
+                  // Text size button (only for synced lyrics)
+                  if (hasSyncedLyrics && _showSyncedLyrics)
+                    _buildActionButton(
+                      icon: _showSizeSlider
+                          ? Icons.text_fields
+                          : Icons.format_size_rounded,
+                      label: 'Size',
+                      onTap: () {
+                        setState(() => _showSizeSlider = !_showSizeSlider);
+                      },
+                      isActive: _showSizeSlider,
+                    ),
+                  if (hasSyncedLyrics && _showSyncedLyrics)
+                    const SizedBox(width: 8),
                   _buildActionButton(
                     icon: Icons.copy_rounded,
                     label: 'Copy',
@@ -178,6 +252,7 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool isActive = false,
   }) {
     return Material(
       color: Colors.transparent,
@@ -186,17 +261,34 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
         borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: isActive
+              ? BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                  ),
+                )
+              : null,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: AppTheme.textSecondary),
+              Icon(
+                icon,
+                size: 16,
+                color: isActive
+                    ? AppTheme.primaryLight
+                    : AppTheme.textSecondary,
+              ),
               const SizedBox(width: 6),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
+                  color: isActive
+                      ? AppTheme.primaryLight
+                      : AppTheme.textSecondary,
                 ),
               ),
             ],
@@ -241,6 +333,7 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
         currentPosition: widget.currentPosition ?? Duration.zero,
         isPlaying: widget.isPlaying,
         onSeek: widget.onSeek,
+        fontSize: _syncedFontSize,
       ),
     ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.98, 0.98));
   }

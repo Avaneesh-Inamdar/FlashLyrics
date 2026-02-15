@@ -8,6 +8,7 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -90,6 +91,13 @@ class MediaNotificationListener : NotificationListenerService() {
             private set
         var currentIsPlaying: Boolean = false
             private set
+        var currentPosition: Long = 0
+            private set
+        var currentPlaybackSpeed: Float = 1.0f
+            private set
+
+        // Position update interval in milliseconds
+        private const val POSITION_UPDATE_INTERVAL = 300L
 
         // Get the current song as a map for Flutter
         fun getCurrentSong(): Map<String, Any?>? {
@@ -103,7 +111,8 @@ class MediaNotificationListener : NotificationListenerService() {
                 "artworkUrl" to currentArtworkUrl,
                 "duration" to currentDuration,
                 "source" to currentSource,
-                "isPlaying" to currentIsPlaying
+                "isPlaying" to currentIsPlaying,
+                "position" to currentPosition
             )
         }
 
@@ -123,9 +132,19 @@ class MediaNotificationListener : NotificationListenerService() {
     private val handler = Handler(Looper.getMainLooper())
     private var lastNotifiedSong: String? = null
     
+    // Position tracking
+    private var positionUpdateRunnable: Runnable? = null
+    private var activePlayingController: MediaController? = null
+    private var lastPositionUpdateTime: Long = 0
+    private var basePosition: Long = 0
+    private var playbackSpeed: Float = 1.0f
+    private var isPositionTrackingActive = false
+    
     interface MediaUpdateListener {
         fun onMediaUpdate(title: String?, artist: String?, album: String?, 
-                         artworkUrl: String?, duration: Long, source: String?, isPlaying: Boolean)
+                         artworkUrl: String?, duration: Long, source: String?, isPlaying: Boolean,
+                         position: Long)
+        fun onPositionUpdate(position: Long, duration: Long, isPlaying: Boolean)
         fun onPlaybackStopped()
     }
     
@@ -141,6 +160,7 @@ class MediaNotificationListener : NotificationListenerService() {
         super.onDestroy()
         isRunning = false
         serviceInstance = null
+        stopPositionTracking()
         cleanupControllers()
         Log.d(TAG, "MediaNotificationListener destroyed")
     }
@@ -156,6 +176,7 @@ class MediaNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         Log.d(TAG, "Listener disconnected")
+        stopPositionTracking()
         cleanupControllers()
     }
     
@@ -220,13 +241,136 @@ class MediaNotificationListener : NotificationListenerService() {
                 activeControllers[packageName]?.let { controller ->
                     if (state?.state == PlaybackState.STATE_PLAYING) {
                         extractAndNotifyMetadata(controller, packageName)
+                        startPositionTracking(controller)
                     } else if (state?.state == PlaybackState.STATE_PAUSED || 
                                state?.state == PlaybackState.STATE_STOPPED) {
                         // Still notify with playing = false
                         extractAndNotifyMetadata(controller, packageName)
+                        if (state?.state == PlaybackState.STATE_PAUSED) {
+                            // Update position one last time but stop tracking
+                            updatePositionFromState(state)
+                            stopPositionTracking()
+                            // Send final position update
+                            mediaUpdateListener?.onPositionUpdate(
+                                currentPosition,
+                                currentDuration,
+                                false
+                            )
+                        } else {
+                            stopPositionTracking()
+                        }
                     }
                 }
             }
+        }
+    }
+    
+    /**
+     * Start periodic position tracking for the active controller.
+     * Uses Handler.postDelayed to send position updates every POSITION_UPDATE_INTERVAL ms.
+     */
+    private fun startPositionTracking(controller: MediaController) {
+        // Don't restart if already tracking the same controller
+        if (isPositionTrackingActive && activePlayingController == controller) {
+            return
+        }
+        
+        stopPositionTracking()
+        activePlayingController = controller
+        isPositionTrackingActive = true
+        
+        // Initialize position from current state
+        controller.playbackState?.let { state ->
+            updatePositionFromState(state)
+        }
+        
+        positionUpdateRunnable = object : Runnable {
+            override fun run() {
+                if (!isPositionTrackingActive) return
+                
+                // Calculate current position
+                val currentPos = calculateCurrentPosition()
+                currentPosition = currentPos
+                
+                // Send position update to Flutter
+                mediaUpdateListener?.onPositionUpdate(
+                    currentPos,
+                    currentDuration,
+                    currentIsPlaying
+                )
+                
+                // Schedule next update
+                if (isPositionTrackingActive && currentIsPlaying) {
+                    handler.postDelayed(this, POSITION_UPDATE_INTERVAL)
+                }
+            }
+        }
+        
+        // Start the periodic updates
+        handler.post(positionUpdateRunnable!!)
+        Log.d(TAG, "Started position tracking")
+    }
+    
+    /**
+     * Stop position tracking when playback stops or pauses.
+     */
+    private fun stopPositionTracking() {
+        isPositionTrackingActive = false
+        positionUpdateRunnable?.let { handler.removeCallbacks(it) }
+        positionUpdateRunnable = null
+        activePlayingController = null
+        Log.d(TAG, "Stopped position tracking")
+    }
+    
+    /**
+     * Update base position values from PlaybackState.
+     * Called when PlaybackState changes to sync our tracking.
+     */
+    private fun updatePositionFromState(state: PlaybackState) {
+        basePosition = state.position
+        lastPositionUpdateTime = state.lastPositionUpdateTime
+        playbackSpeed = state.playbackSpeed
+        currentPlaybackSpeed = playbackSpeed
+        
+        // Handle apps that report 0 or negative speed
+        if (playbackSpeed <= 0) {
+            playbackSpeed = 1.0f
+        }
+        
+        Log.d(TAG, "Position state updated: pos=$basePosition, speed=$playbackSpeed")
+    }
+    
+    /**
+     * Calculate the current playback position based on elapsed time.
+     * Formula: position + (currentTime - lastUpdateTime) * playbackSpeed
+     * 
+     * This handles apps that don't update position frequently by extrapolating
+     * from the last known position.
+     */
+    private fun calculateCurrentPosition(): Long {
+        if (!currentIsPlaying) {
+            return basePosition
+        }
+        
+        // Get fresh state if available
+        activePlayingController?.playbackState?.let { state ->
+            // If the state has been updated recently, use it directly
+            if (state.lastPositionUpdateTime > lastPositionUpdateTime) {
+                updatePositionFromState(state)
+            }
+        }
+        
+        val currentTime = SystemClock.elapsedRealtime()
+        val elapsedSinceUpdate = currentTime - lastPositionUpdateTime
+        
+        // Calculate extrapolated position
+        val calculatedPosition = basePosition + (elapsedSinceUpdate * playbackSpeed).toLong()
+        
+        // Clamp to valid range (0 to duration)
+        return when {
+            calculatedPosition < 0 -> 0
+            currentDuration > 0 && calculatedPosition > currentDuration -> currentDuration
+            else -> calculatedPosition
         }
     }
     
@@ -245,14 +389,26 @@ class MediaNotificationListener : NotificationListenerService() {
         val artworkUri = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
             ?: metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)
         
+        // Get current position from playback state
+        val position = playbackState?.position ?: 0L
+        
         if (title.isNullOrEmpty() || artist.isNullOrEmpty()) {
             Log.d(TAG, "Incomplete metadata, skipping")
             return
         }
         
-        // Debounce - don't notify for same song repeatedly
-        val songKey = "$title|$artist|$isPlaying"
-        if (songKey == lastNotifiedSong) {
+        // Debounce - only skip if exact same notification (include position range to avoid spam)
+        // Include isPlaying so we notify when playback state changes
+        val songKey = "$title|$artist"
+        val isSameSong = songKey == lastNotifiedSong
+        
+        // For same song, only notify if playback state changed or it's a fresh app connection
+        if (isSameSong && isPlaying == currentIsPlaying && mediaUpdateListener != null) {
+            // Same song, same playback state, skip to avoid spam
+            // But still start position tracking if playing
+            if (isPlaying) {
+                startPositionTracking(controller)
+            }
             return
         }
         lastNotifiedSong = songKey
@@ -268,10 +424,19 @@ class MediaNotificationListener : NotificationListenerService() {
         currentDuration = duration
         currentSource = source
         currentIsPlaying = isPlaying
+        currentPosition = position
         
-        Log.d(TAG, "Notifying: $title by $artist from $source (playing: $isPlaying)")
+        // Update position tracking state if we have playback state
+        playbackState?.let { updatePositionFromState(it) }
+        
+        // Start position tracking if song is playing
+        if (isPlaying) {
+            startPositionTracking(controller)
+        }
+        
+        Log.d(TAG, "Notifying: $title by $artist from $source (playing: $isPlaying, pos: ${position}ms)")
         mediaUpdateListener?.onMediaUpdate(
-            title, artist, album, artworkUri, duration, source, isPlaying
+            title, artist, album, artworkUri, duration, source, isPlaying, position
         )
     }
     

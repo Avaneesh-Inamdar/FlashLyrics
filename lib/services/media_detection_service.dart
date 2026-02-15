@@ -17,6 +17,8 @@ class MediaDetectionService {
       StreamController<Song>.broadcast();
   final StreamController<bool> _playbackController =
       StreamController<bool>.broadcast();
+  final StreamController<PlaybackPosition> _positionController =
+      StreamController<PlaybackPosition>.broadcast();
 
   /// Stream of detected songs
   Stream<Song> get songStream => _songController.stream;
@@ -24,11 +26,20 @@ class MediaDetectionService {
   /// Stream of playback state (true = playing, false = stopped)
   Stream<bool> get playbackStream => _playbackController.stream;
 
+  /// Stream of playback position updates (every ~300ms while playing)
+  Stream<PlaybackPosition> get positionStream => _positionController.stream;
+
   Song? _currentSong;
   Song? get currentSong => _currentSong;
 
   bool _isPlaying = false;
   bool get isPlaying => _isPlaying;
+
+  Duration _currentPosition = Duration.zero;
+  Duration get currentPosition => _currentPosition;
+
+  Duration _currentDuration = Duration.zero;
+  Duration get currentDuration => _currentDuration;
 
   /// Check if notification access is granted
   static Future<bool> checkNotificationAccess() async {
@@ -38,8 +49,9 @@ class MediaDetectionService {
       );
       return result ?? false;
     } on PlatformException catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('Error checking notification access: ${e.message}');
+      }
       return false;
     }
   }
@@ -49,8 +61,9 @@ class MediaDetectionService {
     try {
       await _methodChannel.invokeMethod('requestNotificationAccess');
     } on PlatformException catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('Error requesting notification access: ${e.message}');
+      }
     }
   }
 
@@ -75,8 +88,9 @@ class MediaDetectionService {
       );
       return result ?? false;
     } on PlatformException catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('Error checking overlay permission: ${e.message}');
+      }
       return false;
     }
   }
@@ -86,8 +100,9 @@ class MediaDetectionService {
     try {
       await _methodChannel.invokeMethod('requestOverlayPermission');
     } on PlatformException catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('Error requesting overlay permission: ${e.message}');
+      }
     }
   }
 
@@ -106,6 +121,7 @@ class MediaDetectionService {
       final duration = result['duration'] as int? ?? 0;
       final source = result['source'] as String?;
       final isPlaying = result['isPlaying'] as bool? ?? false;
+      final position = result['position'] as int? ?? 0;
 
       if (title == null || title.isEmpty || artist == null || artist.isEmpty) {
         return null;
@@ -124,6 +140,8 @@ class MediaDetectionService {
 
       _currentSong = song;
       _isPlaying = isPlaying;
+      _currentPosition = Duration(milliseconds: position);
+      _currentDuration = Duration(milliseconds: duration);
       return song;
     } on PlatformException catch (e) {
       if (kDebugMode) debugPrint('Error getting current song: ${e.message}');
@@ -155,11 +173,40 @@ class MediaDetectionService {
       case 'media_update':
         _handleMediaUpdate(event);
         break;
+      case 'position_update':
+        _handlePositionUpdate(event);
+        break;
       case 'playback_stopped':
         _isPlaying = false;
+        _currentPosition = Duration.zero;
         _playbackController.add(false);
+        _positionController.add(
+          PlaybackPosition(
+            position: Duration.zero,
+            duration: _currentDuration,
+            isPlaying: false,
+          ),
+        );
         break;
     }
+  }
+
+  void _handlePositionUpdate(Map event) {
+    final position = event['position'] as int? ?? 0;
+    final duration = event['duration'] as int? ?? 0;
+    final isPlaying = event['isPlaying'] as bool? ?? false;
+
+    _currentPosition = Duration(milliseconds: position);
+    _currentDuration = Duration(milliseconds: duration);
+    _isPlaying = isPlaying;
+
+    _positionController.add(
+      PlaybackPosition(
+        position: _currentPosition,
+        duration: _currentDuration,
+        isPlaying: isPlaying,
+      ),
+    );
   }
 
   void _handleMediaUpdate(Map event) {
@@ -170,6 +217,7 @@ class MediaDetectionService {
     final duration = event['duration'] as int? ?? 0;
     final source = event['source'] as String?;
     final isPlaying = event['isPlaying'] as bool? ?? false;
+    final position = event['position'] as int? ?? 0;
 
     if (title == null || title.isEmpty || artist == null || artist.isEmpty) {
       return;
@@ -190,9 +238,20 @@ class MediaDetectionService {
 
     _currentSong = song;
     _isPlaying = isPlaying;
+    _currentPosition = Duration(milliseconds: position);
+    _currentDuration = Duration(milliseconds: duration);
 
     _songController.add(song);
     _playbackController.add(isPlaying);
+
+    // Also emit initial position when song changes
+    _positionController.add(
+      PlaybackPosition(
+        position: _currentPosition,
+        duration: _currentDuration,
+        isPlaying: isPlaying,
+      ),
+    );
   }
 
   void _handleError(dynamic error) {
@@ -204,5 +263,29 @@ class MediaDetectionService {
     stopListening();
     _songController.close();
     _playbackController.close();
+    _positionController.close();
   }
+}
+
+/// Represents the current playback position with metadata
+class PlaybackPosition {
+  final Duration position;
+  final Duration duration;
+  final bool isPlaying;
+
+  const PlaybackPosition({
+    required this.position,
+    required this.duration,
+    required this.isPlaying,
+  });
+
+  /// Progress as a value between 0.0 and 1.0
+  double get progress {
+    if (duration.inMilliseconds == 0) return 0.0;
+    return (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+  }
+
+  @override
+  String toString() =>
+      'PlaybackPosition(position: $position, duration: $duration, isPlaying: $isPlaying)';
 }

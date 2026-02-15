@@ -11,6 +11,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
   final Duration currentPosition;
   final bool isPlaying;
   final ValueChanged<Duration>? onSeek;
+  final double fontSize;
 
   const SyncedLyricsDisplay({
     super.key,
@@ -18,6 +19,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
     required this.currentPosition,
     this.isPlaying = false,
     this.onSeek,
+    this.fontSize = 22.0,
   });
 
   @override
@@ -31,8 +33,9 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
   final ScrollController _scrollController = ScrollController();
   late AnimationController _glowController;
 
-  // Fixed item height for consistent scrolling (Apple Music style)
-  static const double _itemHeight = 64.0;
+  // Dynamic item height based on font size
+  double get _itemHeight =>
+      widget.fontSize * 3.2; // ~3.2x font size for line height
   static const double _viewportPadding = 150.0;
 
   @override
@@ -299,8 +302,12 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
     double opacity,
   ) {
     final text = line.text.isEmpty ? '♪' : line.text;
+    final currentFontSize = widget.fontSize;
+    final inactiveFontSize =
+        currentFontSize * 0.72; // Non-active lines are 72% size
 
     if (isCurrentLine) {
+      // Apple Music / Spotify style - bold, gradient text for current line
       return ShaderMask(
             shaderCallback: (bounds) => LinearGradient(
               colors: [
@@ -311,15 +318,15 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
             ).createShader(bounds),
             child: Text(
               text,
-              style: const TextStyle(
-                fontSize: 22,
+              style: TextStyle(
+                fontSize: currentFontSize,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
                 height: 1.3,
                 letterSpacing: 0.2,
               ),
               textAlign: TextAlign.center,
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           )
@@ -333,21 +340,22 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
           .fadeIn(duration: 180.ms);
     }
 
+    // Inactive lines - faded, smaller text (Apple Music style)
     return AnimatedOpacity(
       opacity: opacity,
       duration: const Duration(milliseconds: 250),
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 16,
+          fontSize: inactiveFontSize,
           fontWeight: FontWeight.w500,
           color: isPastLine
-              ? AppTheme.textHint.withValues(alpha: 0.5)
-              : AppTheme.textSecondary,
+              ? AppTheme.textHint.withValues(alpha: 0.4)
+              : AppTheme.textSecondary.withValues(alpha: 0.8),
           height: 1.4,
         ),
         textAlign: TextAlign.center,
-        maxLines: 2,
+        maxLines: 3,
         overflow: TextOverflow.ellipsis,
       ),
     );

@@ -159,7 +159,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (lyricsState.lyrics != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: LyricsDisplay(lyrics: lyricsState.lyrics!),
+              child: LyricsDisplay(
+                lyrics: lyricsState.lyrics!,
+                currentPosition: mediaState.currentPosition,
+                isPlaying: mediaState.isPlaying,
+              ),
             )
           else
             _buildNoLyricsState(),

@@ -18,14 +18,47 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('SharedPreferences must be initialized before use');
 });
 
-/// Dio client provider
+/// Dio client provider with SSL error handling
 final dioClientProvider = Provider<Dio>((ref) {
-  return Dio(
+  final dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
+      headers: {
+        'User-Agent': 'FlashLyrics/1.0.0',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+        'Accept-Encoding': 'gzip, deflate',
+      },
     ),
   );
+
+  // Add interceptor for better error handling
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onError: (error, handler) {
+        // Handle certificate errors gracefully
+        if (error.type == DioExceptionType.badCertificate ||
+            error.message?.contains('certificate') == true ||
+            error.message?.contains('CERTIFICATE_VERIFY_FAILED') == true) {
+          // Return a network exception with clear message
+          handler.reject(
+            DioException(
+              requestOptions: error.requestOptions,
+              type: DioExceptionType.connectionError,
+              message:
+                  'Server certificate expired or invalid. Try a different lyrics provider.',
+              error: error.error,
+            ),
+          );
+          return;
+        }
+        handler.next(error);
+      },
+    ),
+  );
+
+  return dio;
 });
 
 /// Lyrics remote data source provider
