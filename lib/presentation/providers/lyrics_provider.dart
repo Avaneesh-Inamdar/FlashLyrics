@@ -55,8 +55,9 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   /// Set current song and fetch lyrics
   Future<void> setSong(Song song) async {
-    if (kDebugMode)
+    if (kDebugMode) {
       debugPrint('🎵 Fetching lyrics for: ${song.title} by ${song.artist}');
+    }
 
     state = state.copyWith(currentSong: song, isLoading: true, error: null);
 
@@ -70,16 +71,18 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       }
 
       // Fetch from remote with user's provider priority
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
           '🔄 Fetching lyrics from remote for ${song.title} (providers: $_providerPriority)',
         );
+      }
       final lyrics = await _getLyricsUseCase(
         song,
         providerPriority: _providerPriority,
       );
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('✅ Successfully fetched lyrics for ${song.title}');
+      }
       state = state.copyWith(lyrics: lyrics, isLoading: false);
     } catch (e) {
       if (kDebugMode) debugPrint('❌ Error fetching lyrics: $e');

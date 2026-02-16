@@ -93,6 +93,11 @@ class MediaNotifier extends StateNotifier<MediaState> {
     await MediaDetectionService.requestNotificationAccess();
   }
 
+  /// Get current playing song
+  Future<Song?> getCurrentSong() async {
+    return await _service.getCurrentPlayingSong();
+  }
+
   /// Start listening for media updates
   Future<void> startListening() async {
     _service.startListening();
@@ -132,8 +137,9 @@ class MediaNotifier extends StateNotifier<MediaState> {
   void _onSongDetected(Song song) {
     // Only update if song changed
     if (state.currentSong?.id != song.id) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('🎵 New song detected: ${song.title} by ${song.artist}');
+      }
 
       // IMPORTANT: Clear old lyrics first to prevent mixing
       _lyricsNotifier.clear();
@@ -147,8 +153,9 @@ class MediaNotifier extends StateNotifier<MediaState> {
       );
 
       // Auto-fetch lyrics for detected song
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('🔍 Initiating lyrics fetch for detected song...');
+      }
       _lyricsNotifier.setSong(song);
     }
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
@@ -72,40 +73,47 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
   }
 
   void _updateCurrentLine() {
-    if (_parsedLrc == null) return;
+    if (_parsedLrc == null || !mounted) return;
     final newIndex = _parsedLrc!.getLineIndexAtTime(widget.currentPosition);
 
-    if (newIndex != _currentLineIndex) {
+    if (newIndex != _currentLineIndex && mounted) {
       setState(() => _currentLineIndex = newIndex);
       _scrollToCurrentLine(animate: true);
     }
   }
 
   void _scrollToCurrentLine({bool animate = true}) {
-    if (_currentLineIndex < 0 || !_scrollController.hasClients) return;
+    if (_currentLineIndex < 0 || !_scrollController.hasClients || !mounted)
+      return;
 
-    // Calculate target offset to center the current line
-    final viewportHeight = _scrollController.position.viewportDimension;
-    final centerOffset = viewportHeight / 2 - _itemHeight / 2;
+    try {
+      // Calculate target offset to center the current line
+      final viewportHeight = _scrollController.position.viewportDimension;
+      final centerOffset = viewportHeight / 2 - _itemHeight / 2;
 
-    // Target offset puts current line in the center
-    final targetOffset =
-        (_currentLineIndex * _itemHeight) + _viewportPadding - centerOffset;
+      // Target offset puts current line in the center
+      final targetOffset =
+          (_currentLineIndex * _itemHeight) + _viewportPadding - centerOffset;
 
-    final clampedOffset = targetOffset.clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
-
-    if (animate) {
-      // Smooth Apple Music-style animation
-      _scrollController.animateTo(
-        clampedOffset,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
+      final clampedOffset = targetOffset.clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
       );
-    } else {
-      _scrollController.jumpTo(clampedOffset);
+
+      if (animate && _scrollController.hasClients) {
+        // Optimized animation - faster and more responsive (200ms instead of 350ms)
+        if (!_scrollController.position.isScrollingNotifier.value) {
+          _scrollController.animateTo(
+            clampedOffset,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      } else if (_scrollController.hasClients) {
+        _scrollController.jumpTo(clampedOffset);
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Error scrolling to current line: $e');
     }
   }
 

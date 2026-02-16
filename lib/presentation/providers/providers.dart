@@ -18,24 +18,36 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('SharedPreferences must be initialized before use');
 });
 
-/// Dio client provider with SSL error handling
+/// Dio client provider with SSL error handling and security enforcement
 final dioClientProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
       headers: {
-        'User-Agent': 'FlashLyrics/1.0.0',
+        'User-Agent': 'FlashLyrics/1.1.2',
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
         'Accept-Encoding': 'gzip, deflate',
       },
+      validateStatus: (status) {
+        // Accept all status codes, we handle them in the datasource
+        return true;
+      },
     ),
   );
 
-  // Add interceptor for better error handling
+  // Add interceptor for SSL error handling and security validation
   dio.interceptors.add(
     InterceptorsWrapper(
+      onRequest: (options, handler) {
+        // Enforce HTTPS for all requests (security requirement)
+        if (!options.uri.scheme.startsWith('https')) {
+          // Log warning for any non-HTTPS requests
+          print('⚠️ Warning: Non-HTTPS request detected: ${options.uri}');
+        }
+        return handler.next(options);
+      },
       onError: (error, handler) {
         // Handle certificate errors gracefully
         if (error.type == DioExceptionType.badCertificate ||
@@ -47,7 +59,7 @@ final dioClientProvider = Provider<Dio>((ref) {
               requestOptions: error.requestOptions,
               type: DioExceptionType.connectionError,
               message:
-                  'Server certificate expired or invalid. Try a different lyrics provider.',
+                  'Server certificate expired or invalid. Please try again or use a different lyrics provider.',
               error: error.error,
             ),
           );

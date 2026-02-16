@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -24,7 +25,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(mediaNotifierProvider.notifier).checkPermissions();
+      // Initialize by fetching current song if available
+      _initializeCurrentSong();
     });
+  }
+
+  // Initialize by fetching the currently playing song
+  Future<void> _initializeCurrentSong() async {
+    try {
+      final song = await ref
+          .read(mediaNotifierProvider.notifier)
+          .getCurrentSong();
+      if (song != null) {
+        await ref.read(lyricsNotifierProvider.notifier).setSong(song);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  @override
+  dispose() {
+    // Disable keep screen on when leaving
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
   }
 
   @override
@@ -32,6 +60,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final lyricsState = ref.watch(lyricsNotifierProvider);
     final mediaState = ref.watch(mediaNotifierProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Keep screen on when showing lyrics
+    if (lyricsState.lyrics != null && lyricsState.currentSong != null) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -69,6 +104,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ],
       ),
+      actions: [
+        // Refresh button
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh',
+            onPressed: () async {
+              // Fetch current song and lyrics
+              try {
+                ref.read(lyricsNotifierProvider.notifier).clear();
+                await _initializeCurrentSong();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Refreshing...'),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              }
+            },
+          ),
+        ),
+      ],
     );
   }
 

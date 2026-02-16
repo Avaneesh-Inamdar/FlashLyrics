@@ -8,6 +8,7 @@ import '../../core/constants/app_constants.dart';
 import '../../services/media_detection_service.dart';
 import '../providers/settings_provider.dart';
 import '../providers/media_provider.dart';
+import 'licenses_screen.dart';
 
 /// Settings screen with modern glassmorphism UI
 class SettingsScreen extends ConsumerWidget {
@@ -206,10 +207,10 @@ class SettingsScreen extends ConsumerWidget {
                           context,
                           icon: Icons.gavel_rounded,
                           title: 'Open Source Licenses',
-                          onTap: () => showLicensePage(
-                            context: context,
-                            applicationName: AppConstants.appName,
-                            applicationVersion: AppConstants.appVersion,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const LicensesScreen(),
+                            ),
                           ),
                         ),
                         _buildDivider(context),

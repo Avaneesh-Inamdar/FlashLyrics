@@ -1,7 +1,7 @@
 name: lyricx
 description: "High-performance Android lyrics app with automatic music detection"
 publish_to: 'none'
-version: 1.1.2+5
+version: 1.0.0+1
 
 environment:
   sdk: ^3.11.0

@@ -46,7 +46,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
 
     // Debounce: only search if query hasn't changed for 300ms
-    if (query != _lastQuery && query.length >= 1) {
+    if (query != _lastQuery && query.isNotEmpty) {
       _lastQuery = query;
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted && _searchController.text.trim() == query) {

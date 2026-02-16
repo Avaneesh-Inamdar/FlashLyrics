@@ -162,19 +162,37 @@ class MediaDetectionService {
     _reconnectTimer?.cancel();
     _pollTimer?.cancel();
 
+    // Immediately fetch the current song before waiting for events
+    _fetchCurrentSongImmediate();
+
     _subscription = _eventChannel.receiveBroadcastStream().listen(
       _handleMediaEvent,
       onError: _handleError,
       onDone: _handleStreamDone,
     );
 
-    // Start polling for current song every 3 seconds as backup
+    // Start polling for current song every 1 second as backup
     _startPolling();
   }
 
+  /// Immediately fetch the current song on startup
+  void _fetchCurrentSongImmediate() {
+    Future.microtask(() async {
+      try {
+        final song = await getCurrentPlayingSong();
+        if (song != null && _isListening) {
+          _songController.add(song);
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Immediate fetch error: $e');
+      }
+    });
+  }
+
   void _handleStreamDone() {
-    if (kDebugMode)
+    if (kDebugMode) {
       debugPrint('Media event stream closed, attempting reconnect...');
+    }
     _isListening = false;
     _reconnectTimer?.cancel();
 
@@ -187,7 +205,8 @@ class MediaDetectionService {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+    // Reduced polling interval from 3s to 1s for faster detection
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!_isListening) return;
       try {
         final song = await getCurrentPlayingSong();

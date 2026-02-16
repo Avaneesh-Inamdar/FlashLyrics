@@ -440,8 +440,15 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
   }
 
   void _shareToClipboard(BuildContext context) {
-    final text = '${widget.lyrics.plainLyrics}\n\n— Shared via FlashLyrics';
-    Clipboard.setData(ClipboardData(text: text));
+    final songName = widget.lyrics.id ?? 'lyrics';
+    final formattedLyrics =
+        '''$songName
+
+${widget.lyrics.plainLyrics}
+
+— Shared via FlashLyrics''';
+
+    Clipboard.setData(ClipboardData(text: formattedLyrics));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -452,7 +459,7 @@ class _LyricsDisplayState extends State<LyricsDisplay> {
               size: 20,
             ),
             const SizedBox(width: 12),
-            const Text('Lyrics ready to share!'),
+            const Expanded(child: Text('Lyrics copied to clipboard!')),
           ],
         ),
         behavior: SnackBarBehavior.floating,
