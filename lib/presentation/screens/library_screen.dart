@@ -222,8 +222,12 @@ class LibraryScreen extends ConsumerWidget {
     bool isDark,
   ) {
     // Use trackName and artistName from model if available, otherwise fallback to parsing
-    final title = lyrics.trackName ?? 'Unknown Song';
-    final artist = lyrics.artistName ?? 'Unknown Artist';
+    final rawTitle = lyrics.trackName as String?;
+    final rawArtist = lyrics.artistName as String?;
+    final fallbackTitle = _fallbackTitleFromSongId(lyrics.songId as String?);
+    final fallbackArtist = _fallbackArtistFromSongId(lyrics.songId as String?);
+    final title = _normalizeLabel(rawTitle, fallbackTitle);
+    final artist = _normalizeLabel(rawArtist, fallbackArtist);
 
     final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
     final surfaceLight = isDark
@@ -406,6 +410,41 @@ class LibraryScreen extends ConsumerWidget {
           duration: 400.ms,
         )
         .slideY(begin: 0.05, end: 0, curve: Curves.easeOutCubic);
+  }
+
+  String _normalizeLabel(String? value, String fallback) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  String _fallbackTitleFromSongId(String? songId) {
+    if (songId == null || songId.trim().isEmpty) return 'Unknown Song';
+    final parts = songId.split('_').where((p) => p.trim().isNotEmpty).toList();
+    if (parts.length <= 1) {
+      return _prettifySongId(songId);
+    }
+    return _prettifySongId(parts.sublist(1).join(' '));
+  }
+
+  String _fallbackArtistFromSongId(String? songId) {
+    if (songId == null || songId.trim().isEmpty) return 'Unknown Artist';
+    final parts = songId.split('_').where((p) => p.trim().isNotEmpty).toList();
+    if (parts.length <= 1) return 'Unknown Artist';
+    return _prettifySongId(parts.first);
+  }
+
+  String _prettifySongId(String raw) {
+    final normalized = raw.replaceAll(RegExp(r'_+'), ' ').trim();
+    if (normalized.isEmpty) return raw;
+    final words = normalized.split(' ');
+    return words
+        .map((word) {
+          if (word.isEmpty) return word;
+          final lower = word.toLowerCase();
+          return lower[0].toUpperCase() + lower.substring(1);
+        })
+        .join(' ')
+        .trim();
   }
 
   void _showLyricsDetails(BuildContext context, dynamic lyrics) {

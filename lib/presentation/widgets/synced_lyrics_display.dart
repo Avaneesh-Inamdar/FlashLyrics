@@ -32,6 +32,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   final ScrollController _scrollController = ScrollController();
   double _viewportPadding = 160.0;
   bool _didInitialScroll = false;
+  static const Duration _syncLeadTime = Duration(milliseconds: 200);
 
   // Track playback state for resuming scroll after theme change
   bool _wasPlaying = false;
@@ -78,7 +79,9 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   Future<void> _parseLrc() async {
     final parsed = await LrcParser.parse(widget.lrcContent);
     if (mounted) {
-      final initialIndex = parsed.getLineIndexAtTime(widget.currentPosition);
+      final initialIndex = parsed.getLineIndexAtTime(
+        _applyLeadTime(widget.currentPosition),
+      );
       setState(() {
         _parsedLrc = parsed;
         _currentLineIndex = initialIndex;
@@ -93,7 +96,9 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
   void _updateCurrentLine() {
     if (_parsedLrc == null || !mounted) return;
-    final newIndex = _parsedLrc!.getLineIndexAtTime(widget.currentPosition);
+    final newIndex = _parsedLrc!.getLineIndexAtTime(
+      _applyLeadTime(widget.currentPosition),
+    );
 
     if (newIndex != _currentLineIndex && mounted) {
       setState(() => _currentLineIndex = newIndex);
@@ -124,7 +129,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
         if (!_scrollController.position.isScrollingNotifier.value) {
           _scrollController.animateTo(
             clampedOffset,
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
           );
         }
@@ -134,6 +139,11 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     } catch (e) {
       if (kDebugMode) debugPrint('Error scrolling to current line: $e');
     }
+  }
+
+  Duration _applyLeadTime(Duration position) {
+    if (position <= _syncLeadTime) return Duration.zero;
+    return position - _syncLeadTime;
   }
 
   @override

@@ -394,6 +394,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ('🎻', 'Classical vibes', 'Mozart wrote his first symphony at age 8'),
       ('🎷', 'Jazz it up', 'Jazz originated in New Orleans around 1900'),
       ('🥁', 'Beat drop', 'The fastest drummer played 20+ notes per second'),
+      ('🧠', 'Brain boost', 'Music can improve memory and focus'),
+      ('🌍', 'Global groove', 'There are over 1,200 music genres worldwide'),
+      ('🎼', 'Composer tip', 'A melody usually sticks within 8 notes'),
+      ('📻', 'Radio fact', 'The first FM station launched in 1933'),
+      ('💿', 'Throwback', 'The first CD pressed was ABBA in 1982'),
+      ('🎺', 'Brass facts', 'Trumpets were used in ancient Egypt'),
+      ('🪩', 'Dance note', 'Dancing to music burns more calories than jogging'),
+      ('🎧', 'Headphones', 'Stereo sound was popularized in the 1960s'),
+      ('🎙️', 'Studio life', 'Most songs are mixed with 20+ audio tracks'),
+      ('🌙', 'Night vibes', 'Slow tempo music can lower heart rate'),
     ];
 
     final randomTip = tips[(DateTime.now().millisecond % tips.length)];

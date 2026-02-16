@@ -275,6 +275,8 @@ class LyricsRemoteDataSource {
           isSynced: syncedLyrics != null && syncedLyrics.isNotEmpty,
           source: 'LRCLIB',
           fetchedAt: DateTime.now(),
+          artistName: artist.isNotEmpty ? artist : null,
+          trackName: title.isNotEmpty ? title : null,
         );
       }
       return null;
@@ -377,6 +379,8 @@ class LyricsRemoteDataSource {
           isSynced: true,
           source: 'Textyl',
           fetchedAt: DateTime.now(),
+          artistName: artist.isNotEmpty ? artist : null,
+          trackName: title.isNotEmpty ? title : null,
         );
       }
       return null;
@@ -419,6 +423,8 @@ class LyricsRemoteDataSource {
           isSynced: false,
           source: 'lyrics.ovh',
           fetchedAt: DateTime.now(),
+          artistName: artist.isNotEmpty ? artist : null,
+          trackName: title.isNotEmpty ? title : null,
         );
       }
       return null;
@@ -461,6 +467,8 @@ class LyricsRemoteDataSource {
           isSynced: false,
           source: 'Lyrist',
           fetchedAt: DateTime.now(),
+          artistName: artist.isNotEmpty ? artist : null,
+          trackName: title.isNotEmpty ? title : null,
         );
       }
       return null;
@@ -518,6 +526,19 @@ class LyricsRemoteDataSource {
       }
     }
 
+    // Try LRCLIB search fallback for synced lyrics (helps for metadata mismatches)
+    final searchQueries = <String>{
+      '$artist $title'.trim(),
+      '$cleanArtist $cleanTitle'.trim(),
+      title.trim(),
+      cleanTitle.trim(),
+    }..removeWhere((q) => q.isEmpty);
+
+    final searchSynced = await _searchSyncedLrclib(searchQueries);
+    if (searchSynced != null) {
+      return searchSynced;
+    }
+
     // If no synced lyrics found, return any result with lyrics
     for (final result in results) {
       if (result != null && result.plainLyrics.isNotEmpty) {
@@ -525,27 +546,21 @@ class LyricsRemoteDataSource {
       }
     }
 
-    // For non-Latin songs, try LRCLIB search results for synced lyrics
-    if (isNonLatin) {
-      final queries = <String>{
-        '$artist $title'.trim(),
-        '$cleanArtist $cleanTitle'.trim(),
-        title.trim(),
-        cleanTitle.trim(),
-      }..removeWhere((q) => q.isEmpty);
+    return null;
+  }
 
-      for (final query in queries) {
-        final searchResults = await searchLrclib(query);
-        for (final result in searchResults) {
-          if (result.isSynced &&
-              result.lrcLyrics != null &&
-              result.lrcLyrics!.isNotEmpty) {
-            return result;
-          }
+  Future<LyricsModel?> _searchSyncedLrclib(Set<String> queries) async {
+    for (final query in queries) {
+      if (query.trim().isEmpty) continue;
+      final searchResults = await searchLrclib(query);
+      for (final result in searchResults) {
+        if (result.isSynced &&
+            result.lrcLyrics != null &&
+            result.lrcLyrics!.isNotEmpty) {
+          return result;
         }
       }
     }
-
     return null;
   }
 

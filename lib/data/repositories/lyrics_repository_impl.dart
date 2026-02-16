@@ -183,6 +183,10 @@ class LyricsRepositoryImpl implements LyricsRepository {
 
   @override
   Future<void> cacheLyrics(Lyrics lyrics) async {
+    if (lyrics is LyricsModel) {
+      await _localDataSource.cacheLyrics(lyrics);
+      return;
+    }
     await _localDataSource.cacheLyrics(LyricsModel.fromEntity(lyrics));
   }
 
