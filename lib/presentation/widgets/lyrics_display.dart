@@ -142,9 +142,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         widget.lyrics.lrcLyrics != null &&
         LrcParser.isValidLrc(widget.lyrics.lrcLyrics!);
 
-    // FIXED: Always prioritize synced lyrics when available
-    // If synced is available, show it (ignore user setting for synced vs plain)
-    final useSyncedLyrics = hasSyncedLyrics;
+    // Show synced lyrics when available AND setting is enabled
+    // Setting can be temporarily toggled off for line selection (share as image)
+    final useSyncedLyrics = hasSyncedLyrics && showSyncedLyrics;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -732,7 +732,17 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
             '${currentSong.title} - ${currentSong.artist}\n\n${selectedLines.join('\n')}\n\n— Shared via FlashLyrics';
         Share.share(formattedLyrics);
       }
+
+      // Restore synced lyrics view and clear selection after sharing
+      if (!mounted) return;
+      _clearSelection();
+      ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
     } catch (e) {
+      // Restore state even on error
+      if (mounted) {
+        _clearSelection();
+        ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
+      }
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(

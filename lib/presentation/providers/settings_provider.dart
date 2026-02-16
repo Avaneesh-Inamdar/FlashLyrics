@@ -11,6 +11,7 @@ class AppSettings {
   final double fontSize;
   final bool autoRefresh;
   final bool showSyncedLyrics;
+  final bool keepScreenOn;
   final ThemeModeOption themeMode;
   final List<String> providerPriority;
   final String accentColor;
@@ -19,6 +20,7 @@ class AppSettings {
     this.fontSize = 18.0,
     this.autoRefresh = true,
     this.showSyncedLyrics = true,
+    this.keepScreenOn = false,
     this.themeMode = ThemeModeOption.auto,
     this.accentColor = 'emerald',
     this.providerPriority = const [
@@ -66,6 +68,7 @@ class AppSettings {
     double? fontSize,
     bool? autoRefresh,
     bool? showSyncedLyrics,
+    bool? keepScreenOn,
     ThemeModeOption? themeMode,
     List<String>? providerPriority,
     String? accentColor,
@@ -74,6 +77,7 @@ class AppSettings {
       fontSize: fontSize ?? this.fontSize,
       autoRefresh: autoRefresh ?? this.autoRefresh,
       showSyncedLyrics: showSyncedLyrics ?? this.showSyncedLyrics,
+      keepScreenOn: keepScreenOn ?? this.keepScreenOn,
       themeMode: themeMode ?? this.themeMode,
       accentColor: accentColor ?? this.accentColor,
       providerPriority: providerPriority ?? this.providerPriority,
@@ -84,6 +88,7 @@ class AppSettings {
     'fontSize': fontSize,
     'autoRefresh': autoRefresh,
     'showSyncedLyrics': showSyncedLyrics,
+    'keepScreenOn': keepScreenOn,
     'themeMode': themeMode.name,
     'accentColor': accentColor,
     'providerPriority': providerPriority,
@@ -109,6 +114,7 @@ class AppSettings {
       fontSize: (json['fontSize'] as num?)?.toDouble() ?? 18.0,
       autoRefresh: json['autoRefresh'] as bool? ?? true,
       showSyncedLyrics: json['showSyncedLyrics'] as bool? ?? true,
+      keepScreenOn: json['keepScreenOn'] as bool? ?? false,
       themeMode: parseThemeMode(json['themeMode']),
       accentColor: json['accentColor'] as String? ?? 'emerald',
       providerPriority:
@@ -181,6 +187,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setShowSyncedLyrics(bool value) {
     state = state.copyWith(showSyncedLyrics: value);
+    _saveSettings();
+  }
+
+  void setKeepScreenOn(bool value) {
+    state = state.copyWith(keepScreenOn: value);
     _saveSettings();
   }
 

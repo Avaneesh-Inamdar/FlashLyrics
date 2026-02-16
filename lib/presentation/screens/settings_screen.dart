@@ -90,6 +90,20 @@ class SettingsScreen extends ConsumerWidget {
                                 .setShowSyncedLyrics(value);
                           },
                         ),
+                        _buildDivider(context),
+                        _buildSwitchTile(
+                          context,
+                          icon: Icons.light_mode_rounded,
+                          title: 'Keep Screen On',
+                          subtitle:
+                              'Prevent screen from turning off while viewing lyrics',
+                          value: settings.keepScreenOn,
+                          onChanged: (value) {
+                            ref
+                                .read(settingsProvider.notifier)
+                                .setKeepScreenOn(value);
+                          },
+                        ),
                       ],
                     ),
                   ),

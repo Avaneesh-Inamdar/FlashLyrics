@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/lyrics_display.dart';
 import '../widgets/song_card.dart';
 import '../widgets/permission_card.dart';
@@ -51,7 +53,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   dispose() {
     // Disable keep screen on when leaving
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -59,15 +61,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsNotifierProvider);
     final mediaState = ref.watch(mediaNotifierProvider);
+    final settings = ref.watch(settingsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final showLoadingBackground =
         lyricsState.isLoading && lyricsState.lyrics == null;
 
-    // Keep screen on when showing lyrics
-    if (lyricsState.lyrics != null && lyricsState.currentSong != null) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // Keep screen on when showing lyrics and setting is enabled
+    if (settings.keepScreenOn &&
+        lyricsState.lyrics != null &&
+        lyricsState.currentSong != null) {
+      WakelockPlus.enable();
     } else {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      WakelockPlus.disable();
     }
 
     return Scaffold(
