@@ -32,7 +32,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   final ScrollController _scrollController = ScrollController();
   double _viewportPadding = 160.0;
   bool _didInitialScroll = false;
-  static const Duration _syncLeadTime = Duration(milliseconds: 200);
+  static const Duration _syncLeadTime = Duration(milliseconds: 1200);
 
   // Track playback state for resuming scroll after theme change
   bool _wasPlaying = false;
@@ -129,7 +129,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
         if (!_scrollController.position.isScrollingNotifier.value) {
           _scrollController.animateTo(
             clampedOffset,
-            duration: const Duration(milliseconds: 150),
+            duration: const Duration(milliseconds: 120),
             curve: Curves.easeOutCubic,
           );
         }

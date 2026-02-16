@@ -102,7 +102,7 @@ class MediaNotificationListener : NotificationListenerService() {
             private set
 
         // Position update interval in milliseconds
-        private const val POSITION_UPDATE_INTERVAL = 200L
+        private const val POSITION_UPDATE_INTERVAL = 150L
 
         // Get the current song as a map for Flutter
         fun getCurrentSong(): Map<String, Any?>? {
