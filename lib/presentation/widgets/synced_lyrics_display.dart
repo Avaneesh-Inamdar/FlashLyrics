@@ -142,8 +142,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   }
 
   Duration _applyLeadTime(Duration position) {
-    if (position <= _syncLeadTime) return Duration.zero;
-    return position - _syncLeadTime;
+    return position + _syncLeadTime;
   }
 
   @override
@@ -378,6 +377,8 @@ class CompactSyncedLyrics extends StatelessWidget {
   final String lrcContent;
   final Duration currentPosition;
 
+  static const Duration _syncLeadTime = Duration(milliseconds: 1200);
+
   const CompactSyncedLyrics({
     super.key,
     required this.lrcContent,
@@ -394,8 +395,9 @@ class CompactSyncedLyrics extends StatelessWidget {
         if (!snapshot.hasData) return const SizedBox.shrink();
 
         final lrc = snapshot.data!;
-        final currentLine = lrc.getLineAtTime(currentPosition);
-        final currentIndex = lrc.getLineIndexAtTime(currentPosition);
+        final adjustedPosition = currentPosition + _syncLeadTime;
+        final currentLine = lrc.getLineAtTime(adjustedPosition);
+        final currentIndex = lrc.getLineIndexAtTime(adjustedPosition);
         final nextLine = currentIndex + 1 < lrc.lines.length
             ? lrc.lines[currentIndex + 1]
             : null;
