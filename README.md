@@ -27,32 +27,6 @@ Spotify, YouTube Music, Apple Music, Amazon Music, SoundCloud, Deezer, Tidal, Ji
 
 - **Notification Access** — required to detect what's playing. The app reads media notifications to get song title/artist. That's it.
 
-## Build from source
-
-Requires Flutter 3.41+ and Android SDK.
-
-```bash
-git clone https://github.com/Avaneesh-Inamdar/FlashLyrics.git
-cd FlashLyrics/lyricx
-flutter pub get
-flutter run
-```
-
-For a release APK:
-```bash
-flutter build apk --release
-```
-Output will be at `build/app/outputs/flutter-apk/app-release.apk`.
-
-You'll need to set up your own signing key in `android/key.properties` for release builds.
-
-## Tech stack
-
-- Flutter / Dart
-- Kotlin (Android native layer for MediaSession and NotificationListener)
-- Riverpod for state management
-- Dio for HTTP
-- Material 3 UI with dark/light themes and 5 accent color options
 
 ## Lyrics sources
 
