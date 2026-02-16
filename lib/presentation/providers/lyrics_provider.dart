@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/errors/exceptions.dart';
 import '../../domain/entities/song.dart';
 import '../../domain/entities/lyrics.dart';
 import '../../domain/usecases/lyrics_usecases.dart';
@@ -90,6 +91,10 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       state = state.copyWith(lyrics: lyrics, isLoading: false);
     } catch (e) {
       if (kDebugMode) debugPrint('❌ Error fetching lyrics: $e');
+      if (e is LyricsNotFoundException) {
+        state = state.copyWith(isLoading: false, error: null, lyrics: null);
+        return;
+      }
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -148,12 +153,14 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 /// Lyrics state notifier provider
 final lyricsNotifierProvider =
     StateNotifierProvider<LyricsNotifier, LyricsState>((ref) {
-      final settings = ref.watch(settingsProvider);
+      final providerPriority = ref.watch(
+        settingsProvider.select((settings) => settings.providerPriority),
+      );
       return LyricsNotifier(
         getLyricsUseCase: ref.watch(getLyricsUseCaseProvider),
         searchLyricsUseCase: ref.watch(searchLyricsUseCaseProvider),
         getCachedLyricsUseCase: ref.watch(getCachedLyricsUseCaseProvider),
-        providerPriority: settings.providerPriority,
+        providerPriority: providerPriority,
       );
     });
 

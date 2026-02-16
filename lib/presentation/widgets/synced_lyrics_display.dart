@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -27,35 +26,49 @@ class SyncedLyricsDisplay extends StatefulWidget {
   State<SyncedLyricsDisplay> createState() => _SyncedLyricsDisplayState();
 }
 
-class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
-    with SingleTickerProviderStateMixin {
+class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   ParsedLrc? _parsedLrc;
   int _currentLineIndex = -1;
   final ScrollController _scrollController = ScrollController();
-  late AnimationController _glowController;
   double _viewportPadding = 160.0;
+  bool _didInitialScroll = false;
 
-  // Dynamic item height based on font size - needs enough space for multi-line text
-  double get _itemHeight =>
-      widget.fontSize *
-      4.0; // 4x font size for adequate line height with wrapping
+  // Track playback state for resuming scroll after theme change
+  bool _wasPlaying = false;
+
+  // Dynamic item height based on font size
+  double get _itemHeight => widget.fontSize * 4.0;
 
   @override
   void initState() {
     super.initState();
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
     _parseLrc();
+    _wasPlaying = widget.isPlaying;
   }
 
   @override
   void didUpdateWidget(SyncedLyricsDisplay oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Handle theme change - rebuild to update colors
+    if (oldWidget.fontSize != widget.fontSize) {
+      // Font size changed
+    }
+
     if (oldWidget.lrcContent != widget.lrcContent) {
+      _didInitialScroll = false;
       _parseLrc();
     }
+
+    // Resume auto-scroll when playback resumes after theme change
+    if (_wasPlaying == false && widget.isPlaying == true) {
+      // Playback resumed - ensure scrolling continues
+      if (_currentLineIndex >= 0) {
+        _scrollToCurrentLine(animate: true);
+      }
+    }
+    _wasPlaying = widget.isPlaying;
+
     if (oldWidget.currentPosition != widget.currentPosition &&
         _parsedLrc != null) {
       _updateCurrentLine();
@@ -65,9 +78,15 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
   Future<void> _parseLrc() async {
     final parsed = await LrcParser.parse(widget.lrcContent);
     if (mounted) {
+      final initialIndex = parsed.getLineIndexAtTime(widget.currentPosition);
       setState(() {
         _parsedLrc = parsed;
-        _updateCurrentLine();
+        _currentLineIndex = initialIndex;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _didInitialScroll) return;
+        _didInitialScroll = true;
+        _scrollToCurrentLine(animate: false);
       });
     }
   }
@@ -120,29 +139,27 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
   @override
   void dispose() {
     _scrollController.dispose();
-    _glowController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Track theme to force rebuild on theme change
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (_parsedLrc == null) {
-      return Center(child: _buildLoadingIndicator());
+      return Center(child: _buildLoadingIndicator(isDark));
     }
 
     if (_parsedLrc!.lines.isEmpty) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
       final hintColor = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
 
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.music_off_rounded,
-              size: 48,
-              color: hintColor.withValues(alpha: 0.6),
-            ),
+            Icon(Icons.music_off_rounded, size: 48, color: hintColor),
             const SizedBox(height: 16),
             Text(
               'No synced lyrics available',
@@ -159,7 +176,6 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         final overlayColor = isDark
             ? AppTheme.surfaceColor
             : AppTheme.lightSurface;
@@ -169,36 +185,21 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
 
         return Stack(
           children: [
-            // Main lyrics list with fixed item extent for smooth scrolling
-            ShaderMask(
-              shaderCallback: (bounds) => LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.white,
-                  Colors.white,
-                  Colors.transparent,
-                ],
-                stops: const [0.0, 0.1, 0.9, 1.0],
-              ).createShader(bounds),
-              blendMode: BlendMode.dstIn,
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: EdgeInsets.symmetric(vertical: _viewportPadding),
-                physics: const BouncingScrollPhysics(),
-                itemCount: _parsedLrc!.lines.length,
-                itemExtent:
-                    _itemHeight, // Fixed height for consistent scrolling
-                itemBuilder: (context, index) => _buildLyricLine(index),
-              ),
+            // Main lyrics list - clean minimal design without shader mask
+            ListView.builder(
+              controller: _scrollController,
+              padding: EdgeInsets.symmetric(vertical: _viewportPadding),
+              physics: const BouncingScrollPhysics(),
+              itemCount: _parsedLrc!.lines.length,
+              itemExtent: _itemHeight,
+              itemBuilder: (context, index) => _buildLyricLine(index, isDark),
             ),
-            // Top gradient overlay
+            // Simple top fade effect
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              height: 56,
+              height: 48,
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
@@ -211,12 +212,12 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
                 ),
               ),
             ),
-            // Bottom gradient overlay
+            // Simple bottom fade effect
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
-              height: 56,
+              height: 48,
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
@@ -235,7 +236,8 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
     );
   }
 
-  Widget _buildLoadingIndicator() {
+  Widget _buildLoadingIndicator(bool isDark) {
+    final indicatorColor = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -244,69 +246,50 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
           height: 40,
           child: CircularProgressIndicator(
             strokeWidth: 3,
-            valueColor: AlwaysStoppedAnimation(
-              AppTheme.primaryColor.withValues(alpha: 0.7),
-            ),
+            valueColor: AlwaysStoppedAnimation(indicatorColor),
           ),
         ),
         const SizedBox(height: 16),
         Text(
           'Loading lyrics...',
-          style: TextStyle(fontSize: 14, color: AppTheme.textHint),
+          style: TextStyle(fontSize: 14, color: indicatorColor),
         ),
       ],
     );
   }
 
-  Widget _buildLyricLine(int index) {
+  Widget _buildLyricLine(int index, bool isDark) {
     final line = _parsedLrc!.lines[index];
     final isCurrentLine = index == _currentLineIndex;
     final isPastLine = index < _currentLineIndex;
     final distance = (index - _currentLineIndex).abs();
 
-    // Calculate opacity based on distance from current line (Apple Music style fade)
+    // Calculate opacity based on distance from current line
     double opacity = 1.0;
     if (!isCurrentLine) {
-      opacity = (1.0 - (distance * 0.12)).clamp(0.25, 0.7);
+      opacity = (1.0 - (distance * 0.15)).clamp(0.3, 0.7);
     }
 
-    // Scale factor for the current line (subtle zoom effect)
-    final scale = isCurrentLine ? 1.0 : 0.92;
+    // Scale factor for the current line
+    final scale = isCurrentLine ? 1.0 : 0.88;
 
     return GestureDetector(
       onTap: widget.onSeek != null
           ? () => widget.onSeek!(line.timestamp)
           : null,
       child: SizedBox(
-        height: _itemHeight, // Fixed height for consistent scrolling
+        height: _itemHeight,
         child: Center(
           child: AnimatedScale(
             scale: scale,
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            child: AnimatedBuilder(
-              animation: _glowController,
-              builder: (context, child) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: isCurrentLine
-                      ? BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primaryColor.withValues(
-                                alpha: 0.12 + (_glowController.value * 0.08),
-                              ),
-                              blurRadius: 25,
-                              spreadRadius: 3,
-                            ),
-                          ],
-                        )
-                      : null,
-                  child: child,
-                );
-              },
-              child: _buildLyricText(line, isCurrentLine, isPastLine, opacity),
+            child: _buildLyricText(
+              line,
+              isCurrentLine,
+              isPastLine,
+              opacity,
+              isDark,
             ),
           ),
         ),
@@ -319,66 +302,51 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
     bool isCurrentLine,
     bool isPastLine,
     double opacity,
+    bool isDark,
   ) {
     final text = line.text.isEmpty ? '♪' : line.text;
     final currentFontSize = widget.fontSize;
-    final inactiveFontSize =
-        currentFontSize * 0.72; // Non-active lines are 72% size
+    final inactiveFontSize = currentFontSize * 0.72;
 
     if (isCurrentLine) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-
-      // Dark mode: gradient highlight, Light mode: bold dark text
-      final currentLine = Text(
-        text,
-        style: TextStyle(
-          fontSize: currentFontSize,
-          fontWeight: FontWeight.w700,
-          color: isDark ? Colors.white : AppTheme.primaryDark,
-          height: 1.3,
-          letterSpacing: 0.2,
-        ),
-        textAlign: TextAlign.center,
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-      );
-
-      final decorated = isDark
-          ? ShaderMask(
-              shaderCallback: (bounds) => LinearGradient(
-                colors: [
-                  AppTheme.primaryLight,
-                  AppTheme.primaryColor,
-                  AppTheme.accentColor,
-                ],
-              ).createShader(bounds),
-              child: currentLine,
-            )
-          : currentLine;
-
-      return decorated
-          .animate(onPlay: (c) => c.forward())
+      // Current line - clean bold styling without gradients
+      final currentLineColor = isDark
+          ? AppTheme.textPrimary
+          : AppTheme.lightTextPrimary;
+      return Text(
+            text,
+            style: TextStyle(
+              fontSize: currentFontSize,
+              fontWeight: FontWeight.w700,
+              color: currentLineColor,
+              height: 1.3,
+              letterSpacing: 0.2,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          )
+          .animate()
           .scale(
             begin: const Offset(0.96, 0.96),
             end: const Offset(1.0, 1.0),
-            duration: 280.ms,
+            duration: 200.ms,
             curve: Curves.easeOutCubic,
           )
-          .fadeIn(duration: 180.ms);
+          .fadeIn(duration: 150.ms);
     }
 
-    // Inactive lines - faded, smaller text (Apple Music style)
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Inactive lines - subtle styling
     final pastLineColor = isDark
-        ? AppTheme.textHint.withValues(alpha: 0.45)
-        : AppTheme.lightTextSecondary.withValues(alpha: 0.7);
+        ? AppTheme.textSecondary.withValues(alpha: 0.7)
+        : AppTheme.lightTextSecondary;
     final upcomingLineColor = isDark
-        ? AppTheme.textSecondary.withValues(alpha: 0.9)
-        : AppTheme.lightTextPrimary.withValues(alpha: 0.95);
+        ? AppTheme.textHint
+        : AppTheme.lightTextHint;
 
     return AnimatedOpacity(
       opacity: opacity,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 200),
       child: Text(
         text,
         style: TextStyle(
@@ -408,6 +376,8 @@ class CompactSyncedLyrics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return FutureBuilder<ParsedLrc>(
       future: LrcParser.parse(lrcContent),
       builder: (context, snapshot) {
@@ -420,53 +390,54 @@ class CompactSyncedLyrics extends StatelessWidget {
             ? lrc.lines[currentIndex + 1]
             : null;
 
+        // Clean minimal styling
+        final backgroundColor = isDark
+            ? AppTheme.surfaceColor.withValues(alpha: 0.96)
+            : AppTheme.lightSurface.withValues(alpha: 0.96);
+        final borderColor = isDark
+            ? AppTheme.surfaceLight
+            : AppTheme.lightSurfaceLight;
+        final textColor = isDark
+            ? AppTheme.textPrimary
+            : AppTheme.lightTextPrimary;
+        final nextLineColor = isDark
+            ? AppTheme.textSecondary
+            : AppTheme.lightTextSecondary;
+
         return ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.surfaceColor.withValues(alpha: 0.9),
-                    AppTheme.surfaceColor.withValues(alpha: 0.7),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                ),
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor, width: 0.5),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (currentLine != null)
-                    ShaderMask(
-                      shaderCallback: (bounds) => LinearGradient(
-                        colors: [AppTheme.primaryLight, AppTheme.primaryColor],
-                      ).createShader(bounds),
-                      child: Text(
-                        currentLine.text.isEmpty ? '♪' : currentLine.text,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      currentLine.text.isEmpty ? '♪' : currentLine.text,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                        height: 1.3,
                       ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   if (nextLine != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Text(
                       nextLine.text.isEmpty ? '♪' : nextLine.text,
                       style: TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.textHint,
+                        fontSize: 13,
+                        color: nextLineColor,
                         fontWeight: FontWeight.w500,
                       ),
                       textAlign: TextAlign.center,

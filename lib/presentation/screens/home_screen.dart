@@ -60,6 +60,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final lyricsState = ref.watch(lyricsNotifierProvider);
     final mediaState = ref.watch(mediaNotifierProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final showLoadingBackground =
+        lyricsState.isLoading && lyricsState.lyrics == null;
 
     // Keep screen on when showing lyrics
     if (lyricsState.lyrics != null && lyricsState.currentSong != null) {
@@ -73,9 +75,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: _buildAppBar(mediaState, isDark),
       body: Container(
         decoration: BoxDecoration(
-          gradient: isDark
-              ? AppTheme.backgroundGradient
-              : AppTheme.lightBackgroundGradient,
+          color: showLoadingBackground
+              ? (isDark ? AppTheme.backgroundColor : AppTheme.lightBackground)
+              : null,
+          gradient: showLoadingBackground
+              ? null
+              : (isDark
+                    ? AppTheme.backgroundGradient
+                    : AppTheme.lightBackgroundGradient),
         ),
         child: SafeArea(child: _buildBody(lyricsState, mediaState)),
       ),
@@ -209,7 +216,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(height: 8),
             SongCard(song: lyricsState.currentSong!),
             const SizedBox(height: 16),
-            if (lyricsState.lyrics != null)
+            if (lyricsState.isLoading && lyricsState.lyrics == null)
+              _buildLoadingState()
+            else if (lyricsState.error != null && lyricsState.lyrics == null)
+              _buildErrorState(lyricsState.error!)
+            else if (lyricsState.lyrics != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: LyricsDisplay(
@@ -243,36 +254,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildLoadingState() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final indicatorColor = isDark
+        ? AppTheme.textSecondary
+        : AppTheme.lightTextSecondary;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-                width: 80,
-                height: 80,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: isDark ? AppTheme.surfaceColor : AppTheme.lightSurface,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                      blurRadius: 30,
-                    ),
-                  ],
-                ),
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation(
-                    AppTheme.primaryColor.withValues(alpha: 0.8),
-                  ),
-                ),
-              )
-              .animate(onPlay: (c) => c.repeat())
-              .shimmer(
-                duration: 1500.ms,
-                color: AppTheme.primaryColor.withValues(alpha: 0.1),
-              ),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation(indicatorColor),
+            ),
+          ),
           const SizedBox(height: 24),
           Text(
             'Fetching lyrics...',

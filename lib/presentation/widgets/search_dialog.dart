@@ -28,6 +28,19 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
+    final surfaceLight = isDark
+        ? AppTheme.surfaceLight
+        : AppTheme.lightSurfaceLight;
+    final textPrimary = isDark
+        ? AppTheme.textPrimary
+        : AppTheme.lightTextPrimary;
+    final textSecondary = isDark
+        ? AppTheme.textSecondary
+        : AppTheme.lightTextSecondary;
+    final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       child:
@@ -40,8 +53,8 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppTheme.surfaceColor.withValues(alpha: 0.9),
-                          AppTheme.surfaceLight.withValues(alpha: 0.8),
+                          surfaceColor.withValues(alpha: 0.9),
+                          surfaceLight.withValues(alpha: 0.8),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -57,7 +70,7 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildHeader(),
+                          _buildHeader(textPrimary, textSecondary),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                             child: Column(
@@ -68,6 +81,10 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
                                   hint: 'Enter artist name',
                                   icon: Icons.person_rounded,
                                   delay: 100,
+                                  surfaceLight: surfaceLight,
+                                  textPrimary: textPrimary,
+                                  textSecondary: textSecondary,
+                                  textHint: textHint,
                                 ),
                                 const SizedBox(height: 16),
                                 _buildTextField(
@@ -77,6 +94,10 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
                                   icon: Icons.music_note_rounded,
                                   delay: 200,
                                   onSubmitted: (_) => _search(),
+                                  surfaceLight: surfaceLight,
+                                  textPrimary: textPrimary,
+                                  textSecondary: textSecondary,
+                                  textHint: textHint,
                                 ),
                                 const SizedBox(height: 28),
                                 _buildActions(),
@@ -95,7 +116,7 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(Color textPrimary, Color textSecondary) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -132,19 +153,19 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Search Lyrics',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
+              color: textPrimary,
               letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Find lyrics by artist and song title',
-            style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 14, color: textSecondary),
           ),
         ],
       ),
@@ -157,6 +178,10 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
     required String hint,
     required IconData icon,
     required int delay,
+    required Color surfaceLight,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color textHint,
     Function(String)? onSubmitted,
   }) {
     return TextFormField(
@@ -164,23 +189,20 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
           decoration: InputDecoration(
             labelText: label,
             hintText: hint,
-            prefixIcon: Icon(icon, color: AppTheme.textHint, size: 22),
+            prefixIcon: Icon(icon, color: textHint, size: 22),
             filled: true,
-            fillColor: AppTheme.surfaceLight.withValues(alpha: 0.5),
+            fillColor: surfaceLight.withValues(alpha: 0.5),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.surfaceLight, width: 1.5),
+              borderSide: BorderSide(color: surfaceLight, width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppTheme.primaryColor,
-                width: 2,
-              ),
+              borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -189,14 +211,14 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
                 width: 1.5,
               ),
             ),
-            labelStyle: const TextStyle(color: AppTheme.textSecondary),
-            hintStyle: const TextStyle(color: AppTheme.textHint),
+            labelStyle: TextStyle(color: textSecondary),
+            hintStyle: TextStyle(color: textHint),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 20,
               vertical: 18,
             ),
           ),
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16),
+          style: TextStyle(color: textPrimary, fontSize: 16),
           validator: (value) {
             if (value == null || value.isEmpty) {
               return 'This field is required';
@@ -214,12 +236,19 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
   }
 
   Widget _buildActions() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceLight = isDark
+        ? AppTheme.surfaceLight
+        : AppTheme.lightSurfaceLight;
+    final textSecondary = isDark
+        ? AppTheme.textSecondary
+        : AppTheme.lightTextSecondary;
     return Row(
       children: [
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: AppTheme.surfaceLight.withValues(alpha: 0.5),
+              color: surfaceLight.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Material(
@@ -227,13 +256,13 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
               child: InkWell(
                 onTap: _isLoading ? null : () => Navigator.pop(context),
                 borderRadius: BorderRadius.circular(14),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Text(
                     'Cancel',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: AppTheme.textSecondary,
+                      color: textSecondary,
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
                     ),
@@ -249,7 +278,7 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
           child: Container(
             decoration: BoxDecoration(
               gradient: _isLoading ? null : AppTheme.primaryGradient,
-              color: _isLoading ? AppTheme.surfaceLight : null,
+              color: _isLoading ? surfaceLight : null,
               borderRadius: BorderRadius.circular(14),
               boxShadow: _isLoading
                   ? null
@@ -269,15 +298,13 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: _isLoading
-                      ? const Center(
+                      ? Center(
                           child: SizedBox(
                             width: 22,
                             height: 22,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation(
-                                AppTheme.textSecondary,
-                              ),
+                              valueColor: AlwaysStoppedAnimation(textSecondary),
                             ),
                           ),
                         )

@@ -729,6 +729,16 @@ class SettingsScreen extends ConsumerWidget {
     WidgetRef ref,
     AppSettings settings,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
+    final surfaceLight = isDark
+        ? AppTheme.surfaceLight
+        : AppTheme.lightSurfaceLight;
+    final textPrimary = isDark
+        ? AppTheme.textPrimary
+        : AppTheme.lightTextPrimary;
+    final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -742,8 +752,8 @@ class SettingsScreen extends ConsumerWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    AppTheme.surfaceColor.withValues(alpha: 0.9),
-                    AppTheme.surfaceLight.withValues(alpha: 0.8),
+                    surfaceColor.withValues(alpha: 0.9),
+                    surfaceLight.withValues(alpha: 0.8),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -756,12 +766,12 @@ class SettingsScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
+                  Text(
                     'Font Size',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
+                      color: textPrimary,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -789,7 +799,7 @@ class SettingsScreen extends ConsumerWidget {
                                 : null,
                             color: isSelected
                                 ? null
-                                : AppTheme.surfaceLight.withValues(alpha: 0.3),
+                                : surfaceLight.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Row(
@@ -798,9 +808,7 @@ class SettingsScreen extends ConsumerWidget {
                                 isSelected
                                     ? Icons.radio_button_on_rounded
                                     : Icons.radio_button_off_rounded,
-                                color: isSelected
-                                    ? Colors.white
-                                    : AppTheme.textHint,
+                                color: isSelected ? Colors.white : textHint,
                                 size: 22,
                               ),
                               const SizedBox(width: 12),
@@ -811,7 +819,7 @@ class SettingsScreen extends ConsumerWidget {
                                   fontWeight: FontWeight.w600,
                                   color: isSelected
                                       ? Colors.white
-                                      : AppTheme.textPrimary,
+                                      : textPrimary,
                                 ),
                               ),
                             ],
@@ -1090,6 +1098,18 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   void _showResetConfirmation(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
+    final surfaceLight = isDark
+        ? AppTheme.surfaceLight
+        : AppTheme.lightSurfaceLight;
+    final textPrimary = isDark
+        ? AppTheme.textPrimary
+        : AppTheme.lightTextPrimary;
+    final textSecondary = isDark
+        ? AppTheme.textSecondary
+        : AppTheme.lightTextSecondary;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -1103,8 +1123,8 @@ class SettingsScreen extends ConsumerWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    AppTheme.surfaceColor.withValues(alpha: 0.9),
-                    AppTheme.surfaceLight.withValues(alpha: 0.8),
+                    surfaceColor.withValues(alpha: 0.9),
+                    surfaceLight.withValues(alpha: 0.8),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -1131,41 +1151,38 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
+                  Text(
                     'Reset Settings?',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
+                      color: textPrimary,
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'This will restore all settings to their default values.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textSecondary,
-                    ),
+                    style: TextStyle(fontSize: 14, color: textSecondary),
                   ),
                   const SizedBox(height: 24),
                   Row(
                     children: [
                       Expanded(
                         child: Material(
-                          color: AppTheme.surfaceLight,
+                          color: surfaceLight,
                           borderRadius: BorderRadius.circular(14),
                           child: InkWell(
                             onTap: () => Navigator.pop(context),
                             borderRadius: BorderRadius.circular(14),
-                            child: const Padding(
+                            child: Padding(
                               padding: EdgeInsets.symmetric(vertical: 14),
                               child: Text(
                                 'Cancel',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  color: AppTheme.textSecondary,
+                                  color: textSecondary,
                                 ),
                               ),
                             ),

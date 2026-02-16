@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,9 +33,71 @@ void main() async {
   );
 }
 
-/// Main app widget
-class FlashLyricsApp extends ConsumerWidget {
+/// Main app widget with proper lifecycle handling
+class FlashLyricsApp extends ConsumerStatefulWidget {
   const FlashLyricsApp({super.key});
+
+  @override
+  ConsumerState<FlashLyricsApp> createState() => _FlashLyricsAppState();
+}
+
+class _FlashLyricsAppState extends ConsumerState<FlashLyricsApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    // Add lifecycle observer to handle app state changes
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    // Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // Handle app lifecycle to prevent freezing when screen is off
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+        // App is in background or being paused - reduce activity
+        if (kDebugMode) {
+          debugPrint('App lifecycle: paused/inactive');
+        }
+        break;
+      case AppLifecycleState.resumed:
+        // App is back to foreground - resume normal activity
+        if (kDebugMode) {
+          debugPrint('App lifecycle: resumed');
+        }
+        // Refresh media detection when app resumes
+        _refreshMediaDetection();
+        break;
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App is being terminated or hidden - cleanup
+        if (kDebugMode) {
+          debugPrint('App lifecycle: detached/hidden');
+        }
+        break;
+    }
+  }
+
+  void _refreshMediaDetection() {
+    // Trigger a refresh of media detection when app resumes
+    try {
+      ref
+          .read(mediaNotifierProvider.notifier)
+          .refreshCurrentSong(refreshLyrics: false);
+    } catch (e) {
+      // Ignore errors - provider might not be ready
+    }
+  }
 
   ThemeMode _getThemeMode(ThemeModeOption option) {
     switch (option) {
@@ -48,7 +111,7 @@ class FlashLyricsApp extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final themeMode = _getThemeMode(settings.themeMode);
 

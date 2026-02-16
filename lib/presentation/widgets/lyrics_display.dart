@@ -36,9 +36,104 @@ class LyricsDisplay extends ConsumerStatefulWidget {
 class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   double _syncedFontSize = 22.0; // Default size for synced lyrics
   bool _showSizeSlider = false;
+  int? _selectedStart;
+  int? _selectedEnd;
+
+  // Track theme to force rebuild on theme change
+  Brightness? _lastBrightness;
+
+  bool get _hasSelection => _selectedStart != null && _selectedEnd != null;
+
+  int get _selectedCount {
+    if (!_hasSelection) return 0;
+    return (_selectedEnd! - _selectedStart! + 1).abs();
+  }
+
+  List<String> _plainLyricsLines() {
+    return widget.lyrics.plainLyrics.split('\n');
+  }
+
+  void _clearSelection() {
+    if (!_hasSelection) return;
+    setState(() {
+      _selectedStart = null;
+      _selectedEnd = null;
+    });
+  }
+
+  void _updateSelection(int index) {
+    if (!_hasSelection) {
+      setState(() {
+        _selectedStart = index;
+        _selectedEnd = index;
+      });
+      return;
+    }
+
+    final start = _selectedStart!;
+    final end = _selectedEnd!;
+
+    if (index < start) {
+      setState(() {
+        _selectedStart = index;
+        _selectedEnd = end;
+      });
+      return;
+    }
+
+    if (index > end) {
+      setState(() {
+        _selectedStart = start;
+        _selectedEnd = index;
+      });
+      return;
+    }
+
+    if (start == end && index == start) {
+      _clearSelection();
+      return;
+    }
+
+    setState(() {
+      _selectedStart = index;
+      _selectedEnd = index;
+    });
+  }
+
+  List<String> _getSelectedLines(List<String> lines) {
+    if (!_hasSelection) return const [];
+    final start = _selectedStart!;
+    final end = _selectedEnd!;
+    final safeStart = start.clamp(0, lines.length - 1);
+    final safeEnd = end.clamp(0, lines.length - 1);
+    return lines.sublist(safeStart, safeEnd + 1);
+  }
+
+  @override
+  void didUpdateWidget(covariant LyricsDisplay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lyrics.id != widget.lyrics.id ||
+        oldWidget.lyrics.plainLyrics != widget.lyrics.plainLyrics) {
+      _clearSelection();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Watch for theme changes - this ensures rebuild on theme change
+    final themeBrightness = Theme.of(context).brightness;
+
+    // Force complete rebuild when theme changes
+    final themeChanged =
+        _lastBrightness != null && _lastBrightness != themeBrightness;
+    if (themeChanged || _lastBrightness == null) {
+      _lastBrightness = themeBrightness;
+      // Force rebuild by calling setState in post frame callback
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    }
+
     final settings = ref.watch(settingsProvider);
     final showSyncedLyrics = settings.showSyncedLyrics;
 
@@ -184,8 +279,10 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
                   ),
                   _buildActionButton(
                     icon: Icons.share_rounded,
-                    label: 'Share',
-                    onTap: () => _shareToClipboard(context),
+                    label: _hasSelection
+                        ? 'Share (${_selectedCount.toString()})'
+                        : 'Share',
+                    onTap: () => _handleShareTap(context, showSyncedLyrics),
                   ),
                 ],
               ),
@@ -246,17 +343,11 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          gradient: isSelected ? AppTheme.primaryGradient : null,
+          color: isSelected ? AppTheme.primaryColor : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
+          border: isSelected
+              ? null
+              : Border.all(color: textSecondary.withValues(alpha: 0.25)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -286,16 +377,18 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     required String label,
     required VoidCallback onTap,
     bool isActive = false,
+    bool isEnabled = true,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textSecondary = isDark
         ? AppTheme.textSecondary
         : AppTheme.lightTextSecondary;
+    final disabledColor = textSecondary.withValues(alpha: 0.5);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: isEnabled ? onTap : null,
         borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -314,7 +407,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
               Icon(
                 icon,
                 size: 16,
-                color: isActive ? AppTheme.primaryLight : textSecondary,
+                color: isActive
+                    ? AppTheme.primaryLight
+                    : (isEnabled ? textSecondary : disabledColor),
               ),
               const SizedBox(width: 6),
               Text(
@@ -322,7 +417,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: isActive ? AppTheme.primaryLight : textSecondary,
+                  color: isActive
+                      ? AppTheme.primaryLight
+                      : (isEnabled ? textSecondary : disabledColor),
                 ),
               ),
             ],
@@ -334,41 +431,71 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
 
   Widget _buildPlainLyrics() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final lines = _plainLyricsLines();
+
+    // Clean minimal styling - no gradients
     final textColor = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
-    final cardGradient = isDark
-        ? AppTheme.cardGradient
-        : AppTheme.lightCardGradient;
+    final backgroundColor = isDark
+        ? AppTheme.surfaceColor
+        : AppTheme.lightSurface;
     final borderColor = isDark
         ? AppTheme.surfaceLight
         : AppTheme.lightSurfaceLight;
-    final shadow = isDark
-        ? <BoxShadow>[]
-        : [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ];
 
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: cardGradient,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: borderColor.withValues(alpha: 0.5)),
-        boxShadow: shadow,
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1),
       ),
-      child: SelectableText(
-        widget.lyrics.plainLyrics,
-        style: TextStyle(
-          fontSize: 18,
-          height: 1.85,
-          fontWeight: FontWeight.w500,
-          color: textColor,
-          letterSpacing: 0.3,
-        ),
-        textAlign: TextAlign.center,
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: lines.length,
+        itemBuilder: (context, index) {
+          final line = lines[index];
+          final isEmpty = line.trim().isEmpty;
+          final isSelected =
+              _hasSelection &&
+              index >= _selectedStart! &&
+              index <= _selectedEnd!;
+
+          if (isEmpty) {
+            return const SizedBox(height: 14);
+          }
+
+          return GestureDetector(
+            onTap: () => _updateSelection(index),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: isSelected
+                    ? Border.all(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                      )
+                    : null,
+              ),
+              child: Text(
+                line,
+                style: TextStyle(
+                  fontSize: 18,
+                  height: 1.7,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                  letterSpacing: 0.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        },
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0);
   }
@@ -377,9 +504,11 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     // Dynamic height based on font size (larger fonts need more space)
     final dynamicHeight = 400 + (_syncedFontSize - 14) * 8;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardGradient = isDark
-        ? AppTheme.cardGradient
-        : AppTheme.lightCardGradient;
+
+    // Clean minimal styling - no gradients
+    final backgroundColor = isDark
+        ? AppTheme.surfaceColor
+        : AppTheme.lightSurface;
     final borderColor = isDark
         ? AppTheme.surfaceLight
         : AppTheme.lightSurfaceLight;
@@ -387,9 +516,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     return Container(
       height: dynamicHeight.clamp(400.0, 600.0),
       decoration: BoxDecoration(
-        gradient: cardGradient,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: borderColor.withValues(alpha: 0.3)),
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1),
       ),
       clipBehavior: Clip.antiAlias,
       child: SyncedLyricsDisplay(
@@ -440,12 +569,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.successColor.withValues(alpha: 0.2),
-                    AppTheme.successColor.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppTheme.successColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: AppTheme.successColor.withValues(alpha: 0.3),
@@ -502,13 +626,17 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   }
 
   Future<void> _shareToClipboard(BuildContext context) async {
+    if (!_hasSelection) return;
+
     // Get current song from lyrics provider
     final lyricsState = ref.read(lyricsNotifierProvider);
     final currentSong = lyricsState.currentSong;
 
-    if (currentSong == null) {
+    final selectedLines = _getSelectedLines(_plainLyricsLines());
+
+    if (currentSong == null || selectedLines.isEmpty) {
       // Fallback to text sharing if no song info
-      final formattedLyrics = '''${widget.lyrics.plainLyrics}
+      final formattedLyrics = '''${selectedLines.join('\n')}
 
 — Shared via FlashLyrics''';
       Share.share(formattedLyrics);
@@ -545,7 +673,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       final imageFile = await LyricsImageGenerator.generateLyricsImage(
         song: currentSong,
-        lyrics: widget.lyrics,
+        lines: selectedLines,
         isDark: isDark,
       );
 
@@ -562,11 +690,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         // Fallback to text if image generation failed
         ScaffoldMessenger.of(context).clearSnackBars();
         final formattedLyrics =
-            '''${currentSong.title} - ${currentSong.artist}
-
-${widget.lyrics.plainLyrics}
-
-— Shared via FlashLyrics''';
+            '${currentSong.title} - ${currentSong.artist}\n\n${selectedLines.join('\n')}\n\n— Shared via FlashLyrics';
         Share.share(formattedLyrics);
       }
     } catch (e) {
@@ -594,5 +718,26 @@ ${widget.lyrics.plainLyrics}
         ),
       );
     }
+  }
+
+  void _handleShareTap(BuildContext context, bool showSyncedLyrics) {
+    if (_hasSelection) {
+      _shareToClipboard(context);
+      return;
+    }
+
+    if (showSyncedLyrics) {
+      ref.read(settingsProvider.notifier).setShowSyncedLyrics(false);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Tap lyric lines to select and share'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 }

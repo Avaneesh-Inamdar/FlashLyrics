@@ -27,6 +27,12 @@ class ApiConstants {
   /// Happi.dev API (requires API key but has free tier)
   static const String happiApi = 'https://api.happi.dev/v1/music';
 
+  /// AudD API - Audio fingerprinting for song recognition (FastLyrics method)
+  static const String audDApi = 'https://api.audd.io/';
+
+  /// Enable audio recognition for song identification
+  static const bool enableAudioRecognition = true;
+
   /// Ordered list of APIs to try (priority order)
   /// Prioritizes synced lyrics sources first
   static const List<String> apiPriority = [

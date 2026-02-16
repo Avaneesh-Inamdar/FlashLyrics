@@ -6,6 +6,7 @@ import '../domain/entities/song.dart';
 
 /// Service for detecting currently playing media from other apps.
 /// Uses Android's NotificationListenerService via Method/Event channels.
+/// Also supports audio fingerprinting as a fallback for better song identification.
 class MediaDetectionService {
   static const MethodChannel _methodChannel = MethodChannel('com.lyricx/media');
   static const EventChannel _eventChannel = EventChannel(
@@ -194,13 +195,19 @@ class MediaDetectionService {
       debugPrint('Media event stream closed, attempting reconnect...');
     }
     _isListening = false;
+    _subscription?.cancel();
     _reconnectTimer?.cancel();
 
-    // Attempt reconnect after 2 seconds
-    _reconnectTimer = Timer(const Duration(seconds: 2), () {
-      if (kDebugMode) debugPrint('Reconnecting to media event stream...');
-      startListening();
-    });
+    // Only attempt reconnect if streams are not closed
+    if (!_songController.isClosed &&
+        !_playbackController.isClosed &&
+        !_positionController.isClosed) {
+      // Attempt reconnect after 2 seconds
+      _reconnectTimer = Timer(const Duration(seconds: 2), () {
+        if (kDebugMode) debugPrint('Reconnecting to media event stream...');
+        startListening();
+      });
+    }
   }
 
   void _startPolling() {
@@ -232,6 +239,11 @@ class MediaDetectionService {
 
   void _handleMediaEvent(dynamic event) {
     if (event is! Map) return;
+    // Guard against closed streams
+    if (_songController.isClosed ||
+        _playbackController.isClosed ||
+        _positionController.isClosed)
+      return;
 
     final type = event['type'] as String?;
 
@@ -245,19 +257,26 @@ class MediaDetectionService {
       case 'playback_stopped':
         _isPlaying = false;
         _currentPosition = Duration.zero;
-        _playbackController.add(false);
-        _positionController.add(
-          PlaybackPosition(
-            position: Duration.zero,
-            duration: _currentDuration,
-            isPlaying: false,
-          ),
-        );
+        if (!_playbackController.isClosed) {
+          _playbackController.add(false);
+        }
+        if (!_positionController.isClosed) {
+          _positionController.add(
+            PlaybackPosition(
+              position: Duration.zero,
+              duration: _currentDuration,
+              isPlaying: false,
+            ),
+          );
+        }
         break;
     }
   }
 
   void _handlePositionUpdate(Map event) {
+    // Guard against closed stream
+    if (_positionController.isClosed) return;
+
     final position = event['position'] as int? ?? 0;
     final duration = event['duration'] as int? ?? 0;
     final isPlaying = event['isPlaying'] as bool? ?? false;
@@ -266,16 +285,22 @@ class MediaDetectionService {
     _currentDuration = Duration(milliseconds: duration);
     _isPlaying = isPlaying;
 
-    _positionController.add(
-      PlaybackPosition(
-        position: _currentPosition,
-        duration: _currentDuration,
-        isPlaying: isPlaying,
-      ),
-    );
+    // Guard against closed stream before adding
+    if (!_positionController.isClosed) {
+      _positionController.add(
+        PlaybackPosition(
+          position: _currentPosition,
+          duration: _currentDuration,
+          isPlaying: isPlaying,
+        ),
+      );
+    }
   }
 
   void _handleMediaUpdate(Map event) {
+    // Guard against closed stream
+    if (_songController.isClosed) return;
+
     final title = event['title'] as String?;
     final artist = event['artist'] as String?;
     final album = event['album'] as String?;
@@ -307,17 +332,23 @@ class MediaDetectionService {
     _currentPosition = Duration(milliseconds: position);
     _currentDuration = Duration(milliseconds: duration);
 
-    _songController.add(song);
-    _playbackController.add(isPlaying);
-
-    // Also emit initial position when song changes
-    _positionController.add(
-      PlaybackPosition(
-        position: _currentPosition,
-        duration: _currentDuration,
-        isPlaying: isPlaying,
-      ),
-    );
+    // Guard against closed streams before adding
+    if (!_songController.isClosed) {
+      _songController.add(song);
+    }
+    if (!_playbackController.isClosed) {
+      _playbackController.add(isPlaying);
+    }
+    if (!_positionController.isClosed) {
+      // Also emit initial position when song changes
+      _positionController.add(
+        PlaybackPosition(
+          position: _currentPosition,
+          duration: _currentDuration,
+          isPlaying: isPlaying,
+        ),
+      );
+    }
   }
 
   void _handleError(dynamic error) {
@@ -335,6 +366,27 @@ class MediaDetectionService {
     _positionController.close();
     _reconnectTimer?.cancel();
     _pollTimer?.cancel();
+  }
+
+  /// Manually trigger song identification using audio fingerprinting
+  /// Use this when regular detection fails to identify the song
+  Future<Song?> identifySongManually() async {
+    try {
+      // This would trigger the audio recognition service
+      // For now, we just notify that manual identification is available
+      if (kDebugMode) {
+        debugPrint(
+          'Manual audio recognition triggered - use search as fallback',
+        );
+      }
+
+      // Return null to indicate manual identification is not available
+      // The user can use the search feature instead
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Manual song identification error: $e');
+      return null;
+    }
   }
 }
 

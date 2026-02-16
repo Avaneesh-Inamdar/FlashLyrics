@@ -1,6 +1,7 @@
 import '../../domain/entities/song.dart';
 import '../../domain/entities/lyrics.dart';
 import '../../domain/repositories/lyrics_repository.dart';
+import '../../core/errors/exceptions.dart';
 import '../datasources/lyrics_remote_datasource.dart';
 import '../datasources/lyrics_local_datasource.dart';
 import '../models/lyrics_model.dart';
@@ -45,15 +46,31 @@ class LyricsRepositoryImpl implements LyricsRepository {
     );
 
     // Fall back to sequential fetch if parallel failed
-    lyrics ??= await _remoteDataSource.fetchLyricsWithFallback(
-      song.artist,
-      song.title,
-      providerPriority: providerPriority,
-    );
+    if (lyrics == null) {
+      lyrics = await _remoteDataSource.fetchLyricsWithFallback(
+        song.artist,
+        song.title,
+        providerPriority: providerPriority,
+      );
+    }
 
-    // Cache the result
+    // If still no lyrics or empty, try intelligent search fallback
+    if (lyrics == null || lyrics.plainLyrics.isEmpty) {
+      lyrics = await _trySearchFallback(
+        song.artist,
+        song.title,
+        providerPriority: providerPriority,
+      );
+    }
+
+    // If still no lyrics, throw exception
+    if (lyrics == null) {
+      throw LyricsNotFoundException(
+        message: 'Lyrics not found for "${song.title}" by "${song.artist}"',
+      );
+    }
+
     await _localDataSource.cacheLyrics(lyrics);
-
     return lyrics;
   }
 
@@ -69,6 +86,37 @@ class LyricsRepositoryImpl implements LyricsRepository {
         title,
         providerPriority: providerPriority,
       );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Intelligent search fallback - tries multiple search strategies
+  Future<LyricsModel?> _trySearchFallback(
+    String artist,
+    String title, {
+    List<String>? providerPriority,
+  }) async {
+    try {
+      // Try LRCLIB search first (most comprehensive)
+      final searchResults = await _remoteDataSource.searchLrclib(
+        '$artist $title',
+      );
+
+      if (searchResults.isNotEmpty) {
+        // Return the first result (most relevant)
+        return searchResults.first;
+      }
+
+      // Try with just the title if artist search failed
+      if (artist.isNotEmpty) {
+        final titleOnlyResults = await _remoteDataSource.searchLrclib(title);
+        if (titleOnlyResults.isNotEmpty) {
+          return titleOnlyResults.first;
+        }
+      }
+
+      return null;
     } catch (e) {
       return null;
     }
@@ -102,10 +150,25 @@ class LyricsRepositoryImpl implements LyricsRepository {
       providerPriority: providerPriority,
     );
 
-    // Cache the result
-    await _localDataSource.cacheLyrics(lyrics);
+    // If still no lyrics, try intelligent search fallback
+    if (lyrics == null || lyrics.plainLyrics.isEmpty) {
+      lyrics = await _trySearchFallback(
+        artist,
+        title,
+        providerPriority: providerPriority,
+      );
+    }
 
-    return lyrics;
+    // Cache and return the result
+    if (lyrics != null) {
+      await _localDataSource.cacheLyrics(lyrics);
+      return lyrics;
+    }
+
+    // Throw proper exception if no lyrics found
+    throw LyricsNotFoundException(
+      message: 'Lyrics not found for "$title" by "$artist"',
+    );
   }
 
   /// Search LRCLIB for lyrics matches

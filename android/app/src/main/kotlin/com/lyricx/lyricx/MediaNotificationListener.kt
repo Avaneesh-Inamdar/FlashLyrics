@@ -2,16 +2,21 @@ package com.lyricx.lyricx
 
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 /**
  * Service that listens for media notifications and extracts currently playing song metadata.
@@ -389,9 +394,11 @@ class MediaNotificationListener : NotificationListenerService() {
         val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM)
         val duration = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION)
         
-        // Get album art URI if available
-        val artworkUri = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
+        // Get album art URI or bitmap if available
+        var artworkUri = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
             ?: metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)
+        val artworkBitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
         
         // Get current position from playback state
         val position = playbackState?.position ?: 0L
@@ -399,6 +406,14 @@ class MediaNotificationListener : NotificationListenerService() {
         if (title.isNullOrEmpty() || artist.isNullOrEmpty()) {
             Log.d(TAG, "Incomplete metadata, skipping")
             return
+        }
+
+        if (!artworkUri.isNullOrEmpty() && artworkUri.startsWith("content://")) {
+            artworkUri = cacheArtworkUri(artworkUri, title, artist) ?: artworkUri
+        }
+
+        if (artworkUri.isNullOrEmpty() && artworkBitmap != null) {
+            artworkUri = cacheArtworkBitmap(artworkBitmap, title, artist)
         }
         
         // Debounce - only skip if exact same notification (include position range to avoid spam)
@@ -446,6 +461,43 @@ class MediaNotificationListener : NotificationListenerService() {
         mediaUpdateListener?.onMediaUpdate(
             title, artist, album, artworkUri, duration, source, isPlaying, position
         )
+    }
+
+    private fun cacheArtworkBitmap(bitmap: Bitmap, title: String, artist: String): String? {
+        return try {
+            val safeName = ("${title}_${artist}")
+                .lowercase()
+                .replace(Regex("[^a-z0-9_]+"), "_")
+                .trim('_')
+            val file = File(cacheDir, "art_$safeName.png")
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+            }
+            file.toURI().toString()
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to cache album art bitmap", e)
+            null
+        }
+    }
+
+    private fun cacheArtworkUri(uriString: String, title: String, artist: String): String? {
+        return try {
+            val safeName = ("${title}_${artist}")
+                .lowercase()
+                .replace(Regex("[^a-z0-9_]+"), "_")
+                .trim('_')
+            val uri = Uri.parse(uriString)
+            val input = contentResolver.openInputStream(uri) ?: return null
+            val file = File(cacheDir, "art_${safeName}_uri.png")
+            FileOutputStream(file).use { out ->
+                input.copyTo(out)
+            }
+            input.close()
+            file.toURI().toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cache album art uri", e)
+            null
+        }
     }
     
     private fun getSourceName(packageName: String): String {

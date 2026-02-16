@@ -478,11 +478,30 @@ class LyricsRemoteDataSource {
     List<String>? providerPriority,
   }) async {
     final songId = _generateSongId(artist, title);
+    final isNonLatin = _containsNonLatin('$artist$title');
+    final cleanArtist = _normalizeText(artist, isNonLatin: isNonLatin);
+    final cleanTitle = _normalizeText(title, isNonLatin: isNonLatin);
 
     // Launch parallel requests to synced lyrics APIs
     final futures = <Future<LyricsModel?>>[];
-    futures.add(_fetchFromLrclib(artist, title, songId));
-    futures.add(_fetchFromTextyl(artist, title, songId));
+    final seen = <String>{};
+    void addFetch(String a, String t) {
+      final key = '$a|$t';
+      if (!seen.add(key)) return;
+      futures.add(_fetchFromLrclib(a, t, songId));
+      futures.add(_fetchFromTextyl(a, t, songId));
+    }
+
+    addFetch(artist, title);
+    if (cleanArtist != artist || cleanTitle != title) {
+      addFetch(cleanArtist, cleanTitle);
+    }
+    if (isNonLatin) {
+      addFetch('', title);
+      if (cleanTitle != title) {
+        addFetch('', cleanTitle);
+      }
+    }
 
     // Wait for all requests with a timeout
     final results = await Future.wait(
@@ -491,17 +510,39 @@ class LyricsRemoteDataSource {
       ),
     );
 
-    // Return first result with synced lyrics
+    // FIXED: Prioritize synced lyrics over unsynced
+    // First, check for synced lyrics
     for (final result in results) {
       if (result != null && result.isSynced && result.lrcLyrics != null) {
         return result;
       }
     }
 
-    // Return first result with any lyrics
+    // If no synced lyrics found, return any result with lyrics
     for (final result in results) {
       if (result != null && result.plainLyrics.isNotEmpty) {
         return result;
+      }
+    }
+
+    // For non-Latin songs, try LRCLIB search results for synced lyrics
+    if (isNonLatin) {
+      final queries = <String>{
+        '$artist $title'.trim(),
+        '$cleanArtist $cleanTitle'.trim(),
+        title.trim(),
+        cleanTitle.trim(),
+      }..removeWhere((q) => q.isEmpty);
+
+      for (final query in queries) {
+        final searchResults = await searchLrclib(query);
+        for (final result in searchResults) {
+          if (result.isSynced &&
+              result.lrcLyrics != null &&
+              result.lrcLyrics!.isNotEmpty) {
+            return result;
+          }
+        }
       }
     }
 
