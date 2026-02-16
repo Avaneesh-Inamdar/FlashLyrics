@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/errors/exceptions.dart';
@@ -21,15 +22,17 @@ class LyricsState {
     this.error,
   });
 
+  /// Use [clearLyrics] = true to explicitly set lyrics to null
   LyricsState copyWith({
     Song? currentSong,
     Lyrics? lyrics,
     bool? isLoading,
     String? error,
+    bool clearLyrics = false,
   }) {
     return LyricsState(
       currentSong: currentSong ?? this.currentSong,
-      lyrics: lyrics ?? this.lyrics,
+      lyrics: clearLyrics ? null : (lyrics ?? this.lyrics),
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
@@ -42,6 +45,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
   final SearchLyricsUseCase _searchLyricsUseCase;
   final GetCachedLyricsUseCase _getCachedLyricsUseCase;
   final List<String> _providerPriority;
+  int _latestSearchId = 0; // Track latest search to prevent race conditions
 
   LyricsNotifier({
     required GetLyricsUseCase getLyricsUseCase,
@@ -60,12 +64,21 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       debugPrint('🎵 Fetching lyrics for: ${song.title} by ${song.artist}');
     }
 
-    state = state.copyWith(currentSong: song, isLoading: true, error: null);
+    state = state.copyWith(
+      currentSong: song,
+      isLoading: true,
+      error: null,
+      clearLyrics: true,
+    );
 
     try {
-      // Check cache first unless forced refresh
+      // Check cache first unless forced refresh (use generated songId for consistency)
+      final songId = '${song.artist}_${song.title}'
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9_]'), '_')
+          .replaceAll(RegExp(r'_+'), '_');
       if (!forceRefresh) {
-        final cached = await _getCachedLyricsUseCase(song.id);
+        final cached = await _getCachedLyricsUseCase(songId);
         if (cached != null) {
           if (kDebugMode) {
             debugPrint('✅ Using cached lyrics for ${song.title}');
@@ -75,16 +88,22 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
         }
       }
 
-      // Fetch from remote with user's provider priority
+      // Fetch from remote with user's provider priority and overall timeout
       if (kDebugMode) {
         debugPrint(
           '🔄 Fetching lyrics from remote for ${song.title} (providers: $_providerPriority, force: $forceRefresh)',
         );
       }
-      final lyrics = await _getLyricsUseCase(
-        song,
-        providerPriority: _providerPriority,
-      );
+      final lyrics =
+          await _getLyricsUseCase(
+            song,
+            providerPriority: _providerPriority,
+          ).timeout(
+            const Duration(seconds: 22),
+            onTimeout: () => throw TimeoutException(
+              'Lyrics fetch timed out. Try searching manually.',
+            ),
+          );
       if (kDebugMode) {
         debugPrint('✅ Successfully fetched lyrics for ${song.title}');
       }
@@ -92,7 +111,19 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
     } catch (e) {
       if (kDebugMode) debugPrint('❌ Error fetching lyrics: $e');
       if (e is LyricsNotFoundException) {
-        state = state.copyWith(isLoading: false, error: null, lyrics: null);
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Lyrics not found',
+          clearLyrics: true,
+        );
+        return;
+      }
+      if (e is TimeoutException) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Took too long to fetch lyrics. Try searching manually.',
+          clearLyrics: true,
+        );
         return;
       }
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -101,17 +132,56 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   /// Search for lyrics manually
   Future<void> searchLyrics(String artist, String title) async {
-    state = state.copyWith(isLoading: true, error: null);
+    final searchId = ++_latestSearchId; // Track this search request
+    state = state.copyWith(isLoading: true, error: null, clearLyrics: true);
 
     try {
-      final lyrics = await _searchLyricsUseCase(
-        artist,
-        title,
-        providerPriority: _providerPriority,
-      );
-      state = state.copyWith(lyrics: lyrics, isLoading: false);
+      final lyrics =
+          await _searchLyricsUseCase(
+            artist,
+            title,
+            providerPriority: _providerPriority,
+          ).timeout(
+            const Duration(seconds: 20),
+            onTimeout: () => throw TimeoutException('Manual search timed out'),
+          );
+
+      // Only update state if this is still the latest search
+      if (searchId == _latestSearchId) {
+        state = state.copyWith(
+          lyrics: lyrics,
+          isLoading: false,
+          currentSong: Song(
+            id: lyrics.songId,
+            title: title,
+            artist: artist,
+            album: null,
+          ),
+        );
+      }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      // Only update state if this is still the latest search
+      if (searchId == _latestSearchId) {
+        if (e is TimeoutException) {
+          state = state.copyWith(
+            isLoading: false,
+            error: 'Search timed out. Try again.',
+            clearLyrics: true,
+          );
+        } else if (e is LyricsNotFoundException) {
+          state = state.copyWith(
+            isLoading: false,
+            error: 'No lyrics found for "$title" by "$artist"',
+            clearLyrics: true,
+          );
+        } else {
+          state = state.copyWith(
+            isLoading: false,
+            error: 'Search error: ${e.toString()}',
+            clearLyrics: true,
+          );
+        }
+      }
     }
   }
 

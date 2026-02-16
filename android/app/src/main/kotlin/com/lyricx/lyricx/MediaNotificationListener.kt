@@ -31,9 +31,10 @@ class MediaNotificationListener : NotificationListenerService() {
         private val SUPPORTED_PACKAGES = setOf(
             // Major streaming services
             "com.spotify.music",
+            "com.spotify.lite",
             "com.google.android.apps.youtube.music",
             "app.revanced.android.youtube.music",
-            "com.google.android.youtube",  // Regular YouTube (background play)
+            "com.google.android.youtube",
             "com.apple.android.music",
             "com.amazon.mp3",
             "com.soundcloud.android",
@@ -41,37 +42,68 @@ class MediaNotificationListener : NotificationListenerService() {
             "com.pandora.android",
             "com.aspiro.tidal",
             "com.tidal.music",
+            "com.clearchannel.iheartradio.controller",
+            "tunein.player",
+            "com.audiomack",
+            "com.mixcloud.player",
+            "fm.last.android",
             
             // Regional streaming
-            "com.jio.media.jiobeats",  // JioSaavn
+            "com.jio.media.jiobeats",
             "com.gaana",
-            "com.bsbportal.music",  // Wynk Music
+            "com.bsbportal.music",
             "com.hungama.myplay.activity",
             "com.qobuz.music",
+            "com.resso.app",
+            "com.resso.music",
+            "com.anghami",
+            "com.boomplay.music",
+            "com.yandex.music",
+            "com.tencent.qqmusic",
+            "com.netease.cloudmusic",
+            "com.kugou.android",
+            "com.kuwo.player",
+            "jp.linecorp.linemusic",
+            "com.naver.vibe",
+            "com.iloen.melon",
             
             // Device default players
             "com.sec.android.app.music",
             "com.samsung.android.app.music",
             "com.google.android.music",
             "com.android.music",
-            "com.miui.player",  // Xiaomi
+            "com.miui.player",
             "com.oppo.music",
             "com.oneplus.music",
             "com.huawei.music",
+            "com.transsion.music",
+            "com.realme.music",
+            "com.vivo.music",
             
             // Third-party players
             "org.videolan.vlc",
-            "com.maxmpz.audioplayer",  // Poweramp
+            "com.maxmpz.audioplayer",
             "in.krosbits.musicolet",
-            "com.jrtstudio.music",  // Rocket Player
+            "com.jrtstudio.music",
             "com.doubletwist.androidplayer",
-            "com.neutroncode.mp",  // Neutron
+            "com.neutroncode.mp",
             "com.bandcamp.android",
+            "code.name.monkey.retromusic",
+            "com.tozelabs.musicplayer",
+            "com.tozelabs.musicplayerf",
+            "com.ympx.music",
+            "player.flavor.flavor",
+            "com.joythis.joymusic",
+            "com.flyingdog",
+            "com.nox.evermusic",
             
-            // Other
+            // Podcasts & Other
             "com.audible.application",
+            "com.google.android.apps.podcasts",
+            "com.pocketcasts.android",
             "org.kde.kdeconnect_tp",
-            "com.foobar2000.foobar2000"
+            "com.foobar2000.foobar2000",
+            "com.shazam.android"
         )
         
         // Static listener for Flutter communication
@@ -83,21 +115,13 @@ class MediaNotificationListener : NotificationListenerService() {
 
         // Current song data for retrieval on app restart
         var currentTitle: String? = null
-            private set
         var currentArtist: String? = null
-            private set
         var currentAlbum: String? = null
-            private set
         var currentArtworkUrl: String? = null
-            private set
         var currentDuration: Long = 0
-            private set
         var currentSource: String? = null
-            private set
         var currentIsPlaying: Boolean = false
-            private set
         var currentPosition: Long = 0
-            private set
         var currentPlaybackSpeed: Float = 1.0f
             private set
 
@@ -230,10 +254,16 @@ class MediaNotificationListener : NotificationListenerService() {
     }
     
     private fun isMediaApp(packageName: String): Boolean {
-        // Additional check for apps that have media sessions but aren't in our list
-        return packageName.contains("music") || 
-               packageName.contains("audio") || 
-               packageName.contains("player")
+        // Broad check: any app that has a media session with audio-related name
+        return packageName.contains("music", ignoreCase = true) || 
+               packageName.contains("audio", ignoreCase = true) || 
+               packageName.contains("player", ignoreCase = true) ||
+               packageName.contains("radio", ignoreCase = true) ||
+               packageName.contains("podcast", ignoreCase = true) ||
+               packageName.contains("media", ignoreCase = true) ||
+               packageName.contains("song", ignoreCase = true) ||
+               packageName.contains("tune", ignoreCase = true) ||
+               packageName.contains("stream", ignoreCase = true)
     }
     
     private fun createCallback(packageName: String): MediaController.Callback {

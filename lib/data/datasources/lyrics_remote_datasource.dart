@@ -73,7 +73,7 @@ class LyricsRemoteDataSource {
   /// Fetch lyrics with intelligent fallback chain
   /// Prioritizes APIs that provide synced (LRC) lyrics
   /// [providerPriority] - Optional custom priority order for providers
-  Future<LyricsModel> fetchLyricsWithFallback(
+  Future<LyricsModel?> fetchLyricsWithFallback(
     String artist,
     String title, {
     List<String>? providerPriority,
@@ -102,34 +102,33 @@ class LyricsRemoteDataSource {
       priority = providerPriority ?? ApiConstants.apiPriority;
     }
 
-    // Strategy 1: Try with original text
+    // Strategy 1: Try with original text (FAST)
     for (final api in priority) {
       try {
-        final result = await _fetchFromApi(api, artist, title, songId);
+        final result = await _fetchFromApi(
+          api,
+          artist,
+          title,
+          songId,
+        ).timeout(const Duration(seconds: 6));
         if (result != null && result.plainLyrics.isNotEmpty) {
           return result;
         }
         errors.add('$api: No lyrics found');
       } on DioException catch (e) {
-        // Check for certificate errors
-        if (e.type == DioExceptionType.badCertificate ||
-            e.message?.contains('certificate') == true) {
-          errors.add('$api: SSL certificate expired');
-        } else if (e.type == DioExceptionType.connectionError) {
-          errors.add('$api: Connection failed');
-        } else if (e.response?.statusCode == 404) {
+        if (e.response?.statusCode == 404) {
           errors.add('$api: Not found');
         } else {
           errors.add('$api: Network error');
         }
         continue;
       } catch (e) {
-        errors.add('$api: Failed');
         continue;
       }
     }
 
-    // Strategy 2: Try with cleaned/normalized text (helps for Hindi/non-English)
+    // Strategy 2: Try with cleaned/normalized text (helps for Hindi/special characters)
+    // But only if it's different from original
     if (cleanArtist != artist || cleanTitle != title) {
       for (final api in priority) {
         try {
@@ -138,21 +137,7 @@ class LyricsRemoteDataSource {
             cleanArtist,
             cleanTitle,
             songId,
-          );
-          if (result != null && result.plainLyrics.isNotEmpty) {
-            return result;
-          }
-        } catch (e) {
-          continue; // Silently continue, we already recorded errors above
-        }
-      }
-    }
-
-    // Strategy 3: For Hindi songs, try with just the title (artist info for Hindi songs is often incomplete)
-    if (isNonLatin) {
-      for (final api in priority) {
-        try {
-          final result = await _fetchFromApi(api, '', title, songId);
+          ).timeout(const Duration(seconds: 5));
           if (result != null && result.plainLyrics.isNotEmpty) {
             return result;
           }
@@ -160,35 +145,52 @@ class LyricsRemoteDataSource {
           continue;
         }
       }
+    }
 
-      // Try with cleaned title only
-      if (cleanTitle != title) {
-        for (final api in priority) {
-          try {
-            final result = await _fetchFromApi(api, '', cleanTitle, songId);
-            if (result != null && result.plainLyrics.isNotEmpty) {
-              return result;
-            }
-          } catch (e) {
-            continue;
+    // Strategy 3: For non-Latin songs, try with just title (artist data often incomplete)
+    if (isNonLatin && title.isNotEmpty) {
+      for (final api in priority) {
+        try {
+          final result = await _fetchFromApi(
+            api,
+            '',
+            title,
+            songId,
+          ).timeout(const Duration(seconds: 5));
+          if (result != null && result.plainLyrics.isNotEmpty) {
+            return result;
           }
+        } catch (e) {
+          continue;
         }
       }
     }
 
-    // All APIs failed - provide user-friendly error message
-    if (isNonLatin) {
-      throw LyricsNotFoundException(
-        message:
-            'Lyrics not found. Hindi and non-English songs have limited availability. Try searching manually with English/romanized spellings.',
-      );
+    // Strategy 4: Try LRCLIB search (fuzzy matching, works for partial/mismatched metadata)
+    final searchQueries = <String>{
+      '$artist $title'.trim(),
+      '$cleanArtist $cleanTitle'.trim(),
+      title.trim(),
+      cleanTitle.trim(),
+    }..removeWhere((q) => q.isEmpty);
+
+    for (final query in searchQueries) {
+      try {
+        final searchResults = await searchLrclib(
+          query,
+        ).timeout(const Duration(seconds: 5));
+        for (final result in searchResults) {
+          if (result.plainLyrics.isNotEmpty) {
+            return result;
+          }
+        }
+      } catch (_) {
+        continue;
+      }
     }
 
-    // Show simplified error for English songs
-    throw LyricsNotFoundException(
-      message:
-          'Lyrics not found for "$title" by "$artist". Try searching manually.',
-    );
+    // All strategies exhausted
+    return null;
   }
 
   /// Search all APIs for lyrics - used for manual search
@@ -511,10 +513,10 @@ class LyricsRemoteDataSource {
       }
     }
 
-    // Wait for all requests with a timeout
+    // Wait for all requests with a timeout per request
     final results = await Future.wait(
       futures.map(
-        (f) => f.timeout(const Duration(seconds: 10), onTimeout: () => null),
+        (f) => f.timeout(const Duration(seconds: 12), onTimeout: () => null),
       ),
     );
 
@@ -564,6 +566,101 @@ class LyricsRemoteDataSource {
     return null;
   }
 
+  /// MAIN ENTRY POINT: Fetch lyrics from ALL APIs in parallel
+  /// Returns the best result (synced > plain), null if nothing found
+  /// This replaces the old sequential fallback chain + parallel sync + search fallback
+  Future<LyricsModel?> fetchAllParallel(String artist, String title) async {
+    final songId = _generateSongId(artist, title);
+    final isNonLatin = _containsNonLatin('$artist$title');
+    final cleanArtist = _normalizeText(artist, isNonLatin: isNonLatin);
+    final cleanTitle = _normalizeText(title, isNonLatin: isNonLatin);
+
+    final futures = <Future<LyricsModel?>>[];
+    final seen = <String>{};
+
+    // Helper to add fetch calls without duplicates
+    void addAll(String a, String t) {
+      final key = '${a.toLowerCase()}|${t.toLowerCase()}';
+      if (!seen.add(key)) return;
+      final sid = _generateSongId(a, t);
+      // Direct API calls
+      futures.add(_safeFetch(() => _fetchFromLrclib(a, t, sid)));
+      futures.add(_safeFetch(() => _fetchFromTextyl(a, t, sid)));
+      futures.add(_safeFetch(() => _fetchFromLyricsOvh(a, t, sid)));
+      futures.add(_safeFetch(() => _fetchFromLyrist(a, t, sid)));
+    }
+
+    // Variation 1: Original text
+    addAll(artist, title);
+    // Variation 2: Cleaned/normalized text
+    addAll(cleanArtist, cleanTitle);
+    // Variation 3: Title only (helps for many songs)
+    addAll('', title);
+    addAll('', cleanTitle);
+
+    // Non-Latin special: add NetEase
+    if (isNonLatin) {
+      final sid = _generateSongId(artist, title);
+      futures.add(_safeFetch(() => _fetchFromNetEase(artist, title, sid)));
+      futures.add(_safeFetch(() => _fetchFromNetEase('', title, sid)));
+    }
+
+    // LRCLIB search (fuzzy matching - most powerful for finding mismatched metadata)
+    final searchQueries = <String>{
+      '$artist $title'.trim(),
+      '$cleanArtist $cleanTitle'.trim(),
+      title.trim(),
+      cleanTitle.trim(),
+    }..removeWhere((q) => q.isEmpty);
+
+    for (final query in searchQueries) {
+      futures.add(
+        _safeFetch(() async {
+          final results = await searchLrclib(query);
+          // Return first result with lyrics (prefer synced)
+          LyricsModel? bestPlain;
+          for (final r in results) {
+            if (r.isSynced && r.lrcLyrics != null && r.plainLyrics.isNotEmpty) {
+              return r;
+            }
+            bestPlain ??= (r.plainLyrics.isNotEmpty ? r : null);
+          }
+          return bestPlain;
+        }),
+      );
+    }
+
+    // Fire ALL at once with 15 second timeout per call
+    final results = await Future.wait(
+      futures.map(
+        (f) => f.timeout(const Duration(seconds: 15), onTimeout: () => null),
+      ),
+    );
+
+    // Pick the best result: synced first, then any with lyrics
+    LyricsModel? bestSynced;
+    LyricsModel? bestPlain;
+    for (final result in results) {
+      if (result == null || result.plainLyrics.isEmpty) continue;
+      if (result.isSynced && result.lrcLyrics != null) {
+        bestSynced ??= result;
+      } else {
+        bestPlain ??= result;
+      }
+    }
+
+    return bestSynced ?? bestPlain;
+  }
+
+  /// Wraps any fetch in try-catch so it never throws, just returns null
+  Future<LyricsModel?> _safeFetch(Future<LyricsModel?> Function() fn) async {
+    try {
+      return await fn();
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Generate consistent song ID
   String _generateSongId(String artist, String title) {
     return '${artist}_$title'
@@ -592,22 +689,15 @@ class LyricsRemoteDataSource {
 
   /// Search across all providers for lyrics using a free-form query
   /// Combines LRCLIB search with direct fetches from other APIs
+  /// Now uses parallel API calls for much faster results
   Future<List<LyricsModel>> searchByQuery(String query) async {
     final results = <LyricsModel>[];
     final seenIds = <String>{};
 
-    // 1. Search LRCLIB (proper search API)
-    try {
-      final lrclibResults = await searchLrclib(query);
-      for (final result in lrclibResults) {
-        if (!seenIds.contains(result.songId)) {
-          seenIds.add(result.songId);
-          results.add(result);
-        }
-      }
-    } catch (_) {}
+    // Normalize the query
+    final normalizedQuery = _normalizeText(query);
 
-    // 2. Try to parse query as "artist - title" or "title by artist"
+    // Parse artist/title from query
     String? guessedArtist;
     String? guessedTitle;
 
@@ -626,128 +716,177 @@ class LyricsRemoteDataSource {
       guessedArtist = query.substring(byIndex + 4).trim();
     }
 
-    // 3. If we have artist/title, try other providers
+    // Launch all searches in parallel for maximum speed
+    final futures = <Future<void>>[];
+
+    // 1. Always search LRCLIB with the query (most reliable)
+    futures.add(_searchLrclibAndAddResults(query, results, seenIds));
+    if (normalizedQuery != query) {
+      futures.add(
+        _searchLrclibAndAddResults(normalizedQuery, results, seenIds),
+      );
+    }
+
+    // 2. If we have artist/title, search all providers in parallel
     if (guessedArtist != null && guessedTitle != null) {
       final songId = _generateSongId(guessedArtist, guessedTitle);
 
-      // Try Textyl
-      try {
-        final textylResult = await _fetchFromTextyl(
+      // Add multiple variations in parallel
+      futures.add(
+        _fetchAndAddTextyl(
           guessedArtist,
           guessedTitle,
           songId,
-        );
-        if (textylResult != null &&
-            textylResult.plainLyrics.isNotEmpty &&
-            !seenIds.contains(textylResult.songId)) {
-          seenIds.add(textylResult.songId);
-          results.add(
-            LyricsModel(
-              id: textylResult.id,
-              songId: textylResult.songId,
-              plainLyrics: textylResult.plainLyrics,
-              lrcLyrics: textylResult.lrcLyrics,
-              isSynced: textylResult.isSynced,
-              source: 'Textyl',
-              fetchedAt: textylResult.fetchedAt,
-              artistName: guessedArtist,
-              trackName: guessedTitle,
-            ),
-          );
-        }
-      } catch (_) {}
-
-      // Try lyrics.ovh
-      try {
-        final ovhResult = await _fetchFromLyricsOvh(
+          results,
+          seenIds,
+        ),
+      );
+      futures.add(
+        _fetchAndAddLyricsOvh(
           guessedArtist,
           guessedTitle,
           songId,
-        );
-        if (ovhResult != null &&
-            ovhResult.plainLyrics.isNotEmpty &&
-            !seenIds.contains(ovhResult.songId)) {
-          seenIds.add(ovhResult.songId);
-          results.add(
-            LyricsModel(
-              id: ovhResult.id,
-              songId: ovhResult.songId,
-              plainLyrics: ovhResult.plainLyrics,
-              lrcLyrics: ovhResult.lrcLyrics,
-              isSynced: false,
-              source: 'lyrics.ovh',
-              fetchedAt: ovhResult.fetchedAt,
-              artistName: guessedArtist,
-              trackName: guessedTitle,
-            ),
-          );
-        }
-      } catch (_) {}
-
-      // Try Lyrist
-      try {
-        final lyristResult = await _fetchFromLyrist(
+          results,
+          seenIds,
+        ),
+      );
+      futures.add(
+        _fetchAndAddLyrist(
           guessedArtist,
           guessedTitle,
           songId,
+          results,
+          seenIds,
+        ),
+      );
+
+      // Also try normalized versions
+      final cleanArtist = _normalizeText(guessedArtist);
+      final cleanTitle = _normalizeText(guessedTitle);
+      if (cleanArtist != guessedArtist || cleanTitle != guessedTitle) {
+        final cleanSongId = _generateSongId(cleanArtist, cleanTitle);
+        futures.add(
+          _fetchAndAddTextyl(
+            cleanArtist,
+            cleanTitle,
+            cleanSongId,
+            results,
+            seenIds,
+          ),
         );
-        if (lyristResult != null &&
-            lyristResult.plainLyrics.isNotEmpty &&
-            !seenIds.contains(lyristResult.songId)) {
-          seenIds.add(lyristResult.songId);
-          results.add(
-            LyricsModel(
-              id: lyristResult.id,
-              songId: lyristResult.songId,
-              plainLyrics: lyristResult.plainLyrics,
-              lrcLyrics: lyristResult.lrcLyrics,
-              isSynced: false,
-              source: 'Lyrist',
-              fetchedAt: lyristResult.fetchedAt,
-              artistName: guessedArtist,
-              trackName: guessedTitle,
-            ),
-          );
-        }
-      } catch (_) {}
-    }
-
-    // 4. Also try query as just a title (common search pattern)
-    if (results.isEmpty) {
-      final songId = _generateSongId('', query);
-
-      // Try searching with query as title and various common artist patterns
-      for (final provider in ['textyl', 'lyrics.ovh', 'lyrist']) {
-        try {
-          LyricsModel? result;
-          if (provider == 'textyl') {
-            // Textyl takes a combined query
-            result = await _fetchFromTextyl('', query, songId);
-          }
-          if (result != null &&
-              result.plainLyrics.isNotEmpty &&
-              !seenIds.contains(result.songId)) {
-            seenIds.add(result.songId);
-            results.add(
-              LyricsModel(
-                id: result.id,
-                songId: result.songId,
-                plainLyrics: result.plainLyrics,
-                lrcLyrics: result.lrcLyrics,
-                isSynced: result.isSynced,
-                source: 'Textyl',
-                fetchedAt: result.fetchedAt,
-                artistName: result.artistName,
-                trackName: query,
-              ),
-            );
-            break; // Found a result
-          }
-        } catch (_) {}
+        futures.add(
+          _fetchAndAddLyricsOvh(
+            cleanArtist,
+            cleanTitle,
+            cleanSongId,
+            results,
+            seenIds,
+          ),
+        );
       }
     }
 
+    // 3. Also try search with just the title (in case user only entered song name)
+    if (results.isEmpty && guessedTitle != null && guessedTitle.isNotEmpty) {
+      final titleOnlyId = _generateSongId('', guessedTitle);
+      futures.add(
+        _fetchAndAddTextyl('', guessedTitle, titleOnlyId, results, seenIds),
+      );
+      futures.add(
+        _fetchAndAddLyricsOvh('', guessedTitle, titleOnlyId, results, seenIds),
+      );
+    }
+
+    // Wait for all parallel searches to complete (with timeout)
+    await Future.wait(
+      futures.map(
+        (f) => f.timeout(const Duration(seconds: 8), onTimeout: () {}),
+      ),
+    );
+
+    // Sort results: prioritize synced lyrics, then by source reliability
+    results.sort((a, b) {
+      // Synced lyrics first
+      if (a.isSynced && !b.isSynced) return -1;
+      if (!a.isSynced && b.isSynced) return 1;
+      return 0;
+    });
+
     return results;
+  }
+
+  /// Helper to search LRCLIB and add results
+  Future<void> _searchLrclibAndAddResults(
+    String query,
+    List<LyricsModel> results,
+    Set<String> seenIds,
+  ) async {
+    try {
+      final lrclibResults = await searchLrclib(query);
+      for (final result in lrclibResults) {
+        if (!seenIds.contains(result.songId)) {
+          seenIds.add(result.songId);
+          results.add(result);
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Helper to fetch from Textyl and add results
+  Future<void> _fetchAndAddTextyl(
+    String artist,
+    String title,
+    String songId,
+    List<LyricsModel> results,
+    Set<String> seenIds,
+  ) async {
+    try {
+      final result = await _fetchFromTextyl(artist, title, songId);
+      if (result != null &&
+          result.plainLyrics.isNotEmpty &&
+          !seenIds.contains(result.songId)) {
+        seenIds.add(result.songId);
+        results.add(result);
+      }
+    } catch (_) {}
+  }
+
+  /// Helper to fetch from lyrics.ovh and add results
+  Future<void> _fetchAndAddLyricsOvh(
+    String artist,
+    String title,
+    String songId,
+    List<LyricsModel> results,
+    Set<String> seenIds,
+  ) async {
+    try {
+      final result = await _fetchFromLyricsOvh(artist, title, songId);
+      if (result != null &&
+          result.plainLyrics.isNotEmpty &&
+          !seenIds.contains(result.songId)) {
+        seenIds.add(result.songId);
+        results.add(result);
+      }
+    } catch (_) {}
+  }
+
+  /// Helper to fetch from Lyrist and add results
+  Future<void> _fetchAndAddLyrist(
+    String artist,
+    String title,
+    String songId,
+    List<LyricsModel> results,
+    Set<String> seenIds,
+  ) async {
+    try {
+      final result = await _fetchFromLyrist(artist, title, songId);
+      if (result != null &&
+          result.plainLyrics.isNotEmpty &&
+          !seenIds.contains(result.songId)) {
+        seenIds.add(result.songId);
+        results.add(result);
+      }
+    } catch (_) {}
   }
 
   /// Fetch from ChartLyrics - Free API, no authentication required

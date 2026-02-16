@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +23,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   List<SearchResult> _results = [];
   String? _error;
   String _lastQuery = '';
+  int _searchId = 0; // Track search requests to cancel stale ones
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -34,6 +37,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     setState(() {}); // Update UI for clear button
 
     if (query.isEmpty) {
+      _debounceTimer?.cancel();
       setState(() {
         _results = [];
         _error = null;
@@ -42,10 +46,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return;
     }
 
-    // Debounce: only search if query hasn't changed for 300ms
+    // Debounce: cancel previous timer and wait 400ms
     if (query != _lastQuery && query.isNotEmpty) {
       _lastQuery = query;
-      Future.delayed(const Duration(milliseconds: 300), () {
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 400), () {
         if (mounted && _searchController.text.trim() == query) {
           _performSearch();
         }
@@ -55,6 +60,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _focusNode.dispose();
@@ -150,6 +156,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     controller: _searchController,
                     focusNode: _focusNode,
                     style: TextStyle(color: textPrimary, fontSize: 16),
+                    // Fix backspace selecting whole word issue
+                    enableInteractiveSelection: true,
+                    mouseCursor: SystemMouseCursors.text,
                     decoration: InputDecoration(
                       hintText: 'Search for a song...',
                       hintStyle: TextStyle(color: textHint),
@@ -592,10 +601,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
+    final thisSearchId =
+        ++_searchId; // Increment to invalidate any in-flight search
+
     setState(() {
       _isSearching = true;
       _error = null;
-      _results = [];
+      // DON'T clear _results here — keep showing old results until new ones arrive
     });
 
     try {
@@ -620,31 +632,54 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
       }
 
-      // If we parsed artist and title, search with them directly
+      // If we parsed artist and title, search with them directly using parallel fetch
       if (artist != null &&
           artist.isNotEmpty &&
           title != null &&
           title.isNotEmpty) {
         try {
+          // Use searchAllProviders for direct artist/title search
           final artistTitleResults = await datasource.searchAllProviders(
             artist,
             title,
           );
-          allResults = artistTitleResults.values
-              .whereType<LyricsModel>()
-              .where((m) => m.plainLyrics.isNotEmpty)
-              .toList();
+
+          // Collect all results that have lyrics
+          for (final entry in artistTitleResults.entries) {
+            final model = entry.value;
+            if (model != null && model.plainLyrics.isNotEmpty) {
+              allResults.add(model);
+            }
+          }
         } catch (e) {
           if (kDebugMode) debugPrint('Direct artist/title search failed: $e');
         }
       }
 
       // If no results from direct search or couldn't parse, try general query search
+      // This uses LRCLIB search which is more forgiving
       if (allResults.isEmpty) {
         allResults = await datasource.searchByQuery(query);
       }
 
-      final results = allResults
+      // Filter and deduplicate results
+      final seenIds = <String>{};
+      final filteredResults = <LyricsModel>[];
+      for (final model in allResults) {
+        if (model.plainLyrics.isNotEmpty && !seenIds.contains(model.songId)) {
+          seenIds.add(model.songId);
+          filteredResults.add(model);
+        }
+      }
+
+      // Sort results: prioritize synced lyrics
+      filteredResults.sort((a, b) {
+        if (a.isSynced && !b.isSynced) return -1;
+        if (!a.isSynced && b.isSynced) return 1;
+        return 0;
+      });
+
+      final results = filteredResults
           .map(
             (model) => SearchResult(
               title: model.trackName ?? 'Unknown Song',
@@ -657,7 +692,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           )
           .toList();
 
-      if (mounted) {
+      if (mounted && thisSearchId == _searchId) {
         setState(() {
           _results = results;
           _isSearching = false;
@@ -670,7 +705,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && thisSearchId == _searchId) {
         setState(() {
           _error = 'Search error: ${e.toString()}';
           _isSearching = false;

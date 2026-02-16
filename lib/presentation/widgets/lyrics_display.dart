@@ -142,6 +142,10 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         widget.lyrics.lrcLyrics != null &&
         LrcParser.isValidLrc(widget.lyrics.lrcLyrics!);
 
+    // FIXED: Always prioritize synced lyrics when available
+    // If synced is available, show it (ignore user setting for synced vs plain)
+    final useSyncedLyrics = hasSyncedLyrics;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -149,14 +153,10 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         if (widget.showActions)
           _buildActionsRow(context, hasSyncedLyrics, showSyncedLyrics),
         // Font size slider (only for synced lyrics)
-        if (hasSyncedLyrics && showSyncedLyrics && _showSizeSlider)
-          _buildFontSizeSlider(),
+        if (hasSyncedLyrics && _showSizeSlider) _buildFontSizeSlider(),
         const SizedBox(height: 16),
-        // Lyrics content - show synced if available and toggle is on
-        if (hasSyncedLyrics && showSyncedLyrics)
-          _buildSyncedLyrics()
-        else
-          _buildPlainLyrics(),
+        // Lyrics content - show synced if available, otherwise plain
+        if (useSyncedLyrics) _buildSyncedLyrics() else _buildPlainLyrics(),
         const SizedBox(height: 16),
         // Source info
         _buildSourceInfo(context),
@@ -165,6 +165,14 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   }
 
   Widget _buildFontSizeSlider() {
+    // Only show if we have synced lyrics
+    final hasSyncedLyrics =
+        widget.lyrics.isSynced &&
+        widget.lyrics.lrcLyrics != null &&
+        LrcParser.isValidLrc(widget.lyrics.lrcLyrics!);
+
+    if (!hasSyncedLyrics) return const SizedBox.shrink();
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
     final surfaceLight = isDark
@@ -254,14 +262,15 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (hasSyncedLyrics) _buildChipToggle(showSyncedLyrics),
+              // Show synced indicator (synced is always preferred now)
+              if (hasSyncedLyrics) _buildSyncedIndicator(),
               if (hasSyncedLyrics) const SizedBox(height: 8),
               Wrap(
                 alignment: WrapAlignment.end,
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (hasSyncedLyrics && showSyncedLyrics)
+                  if (hasSyncedLyrics)
                     _buildActionButton(
                       icon: _showSizeSlider
                           ? Icons.text_fields
@@ -291,6 +300,36 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         ),
       ),
     ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.1, end: 0);
+  }
+
+  Widget _buildSyncedIndicator() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceLight = isDark
+        ? AppTheme.surfaceLight
+        : AppTheme.lightSurfaceLight;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.successColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.sync_rounded, size: 14, color: AppTheme.successColor),
+          const SizedBox(width: 6),
+          Text(
+            'Synced Lyrics Available',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.successColor,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildChipToggle(bool showSyncedLyrics) {

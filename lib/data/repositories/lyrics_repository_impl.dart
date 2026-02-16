@@ -20,106 +20,32 @@ class LyricsRepositoryImpl implements LyricsRepository {
 
   @override
   Future<Lyrics> getLyrics(Song song, {List<String>? providerPriority}) async {
-    // First check cache
-    final cachedLyrics = _localDataSource.getCachedLyrics(song.id);
+    // Generate consistent songId from artist/title (same as searchLyrics)
+    final songId = _generateSongId(song.artist, song.title);
+
+    // Check cache only if it matches the exact song
+    final cachedLyrics = _localDataSource.getCachedLyrics(songId);
     if (cachedLyrics != null) {
-      // If cached version exists but isn't synced, try to get synced version
-      if (!cachedLyrics.isSynced) {
-        final syncedLyrics = await _trySyncedLyrics(
-          song.artist,
-          song.title,
-          providerPriority: providerPriority,
-        );
-        if (syncedLyrics != null) {
-          await _localDataSource.cacheLyrics(syncedLyrics);
-          return syncedLyrics;
-        }
-      }
+      // Return cached synced lyrics immediately
+      if (cachedLyrics.isSynced) return cachedLyrics;
+      // Return cached unsynced, but don't block - upgrade can happen next time
       return cachedLyrics;
     }
 
-    // Try to get synced lyrics first (parallel fetch)
-    var lyrics = await _trySyncedLyrics(
+    // ONE parallel blast of ALL APIs at once (no sequential fallback nonsense)
+    final lyrics = await _remoteDataSource.fetchAllParallel(
       song.artist,
       song.title,
-      providerPriority: providerPriority,
     );
 
-    // Fall back to sequential fetch if parallel failed
-    if (lyrics == null) {
-      lyrics = await _remoteDataSource.fetchLyricsWithFallback(
-        song.artist,
-        song.title,
-        providerPriority: providerPriority,
-      );
+    if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
+      await _localDataSource.cacheLyrics(lyrics);
+      return lyrics;
     }
 
-    // If still no lyrics or empty, try intelligent search fallback
-    if (lyrics == null || lyrics.plainLyrics.isEmpty) {
-      lyrics = await _trySearchFallback(
-        song.artist,
-        song.title,
-        providerPriority: providerPriority,
-      );
-    }
-
-    // If still no lyrics, throw exception
-    if (lyrics == null) {
-      throw LyricsNotFoundException(
-        message: 'Lyrics not found for "${song.title}" by "${song.artist}"',
-      );
-    }
-
-    await _localDataSource.cacheLyrics(lyrics);
-    return lyrics;
-  }
-
-  /// Try to fetch synced lyrics using parallel API calls
-  Future<LyricsModel?> _trySyncedLyrics(
-    String artist,
-    String title, {
-    List<String>? providerPriority,
-  }) async {
-    try {
-      return await _remoteDataSource.fetchSyncedLyricsParallel(
-        artist,
-        title,
-        providerPriority: providerPriority,
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// Intelligent search fallback - tries multiple search strategies
-  Future<LyricsModel?> _trySearchFallback(
-    String artist,
-    String title, {
-    List<String>? providerPriority,
-  }) async {
-    try {
-      // Try LRCLIB search first (most comprehensive)
-      final searchResults = await _remoteDataSource.searchLrclib(
-        '$artist $title',
-      );
-
-      if (searchResults.isNotEmpty) {
-        // Return the first result (most relevant)
-        return searchResults.first;
-      }
-
-      // Try with just the title if artist search failed
-      if (artist.isNotEmpty) {
-        final titleOnlyResults = await _remoteDataSource.searchLrclib(title);
-        if (titleOnlyResults.isNotEmpty) {
-          return titleOnlyResults.first;
-        }
-      }
-
-      return null;
-    } catch (e) {
-      return null;
-    }
+    throw LyricsNotFoundException(
+      message: 'Lyrics not found for "${song.title}" by "${song.artist}"',
+    );
   }
 
   @override
@@ -136,36 +62,14 @@ class LyricsRepositoryImpl implements LyricsRepository {
       return cachedLyrics;
     }
 
-    // Try parallel synced lyrics first
-    var lyrics = await _trySyncedLyrics(
-      artist,
-      title,
-      providerPriority: providerPriority,
-    );
+    // ONE parallel blast of ALL APIs
+    final lyrics = await _remoteDataSource.fetchAllParallel(artist, title);
 
-    // Fall back to sequential fetch
-    lyrics ??= await _remoteDataSource.fetchLyricsWithFallback(
-      artist,
-      title,
-      providerPriority: providerPriority,
-    );
-
-    // If still no lyrics, try intelligent search fallback
-    if (lyrics == null || lyrics.plainLyrics.isEmpty) {
-      lyrics = await _trySearchFallback(
-        artist,
-        title,
-        providerPriority: providerPriority,
-      );
-    }
-
-    // Cache and return the result
-    if (lyrics != null) {
+    if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
       await _localDataSource.cacheLyrics(lyrics);
       return lyrics;
     }
 
-    // Throw proper exception if no lyrics found
     throw LyricsNotFoundException(
       message: 'Lyrics not found for "$title" by "$artist"',
     );

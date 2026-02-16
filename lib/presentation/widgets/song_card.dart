@@ -151,14 +151,7 @@ class _SongCardState extends State<SongCard> {
   }
 
   Widget _buildAlbumArt(Color surfaceLight) {
-    // Debug: Print artwork URL to console
     final artworkUrl = _resolvedArtworkUrl;
-
-    if (artworkUrl != null && artworkUrl.isNotEmpty) {
-      debugPrint('🎨 Album art URL: $artworkUrl');
-    } else {
-      debugPrint('🎨 No album art URL available for: ${widget.song.title}');
-    }
 
     return Container(
       width: 72,

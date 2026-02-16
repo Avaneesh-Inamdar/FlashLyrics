@@ -16,7 +16,11 @@ class MediaDetectionService {
   StreamSubscription? _subscription;
   Timer? _reconnectTimer;
   Timer? _pollTimer;
+  Timer? _healthCheckTimer; // Add health check timer to detect killed service
   bool _isListening = false;
+
+  // Track when we last successfully got a song
+  DateTime? _lastSuccessfulSongDetection;
 
   final StreamController<Song> _songController =
       StreamController<Song>.broadcast();
@@ -143,7 +147,8 @@ class MediaDetectionService {
         source: source,
       );
 
-      _currentSong = song;
+      // DON'T update _currentSong here — polling compares against it to detect changes.
+      // Only update position/playback state.
       _isPlaying = isPlaying;
       _currentPosition = Duration(milliseconds: position);
       _currentDuration = Duration(milliseconds: duration);
@@ -156,8 +161,24 @@ class MediaDetectionService {
 
   /// Start listening for media updates
   void startListening() {
-    if (_isListening) return;
+    if (_isListening) {
+      // Already listening — but ensure polling is still active
+      if (_pollTimer == null || !_pollTimer!.isActive) {
+        if (kDebugMode)
+          debugPrint(
+            '⚠️ startListening: was listening but poll timer dead, restarting polling',
+          );
+        _startPolling();
+      }
+      if (_healthCheckTimer == null || !_healthCheckTimer!.isActive) {
+        _startHealthCheck();
+      }
+      return;
+    }
     _isListening = true;
+
+    if (kDebugMode)
+      debugPrint('🚀 MediaDetectionService.startListening() - first start');
 
     _subscription?.cancel();
     _reconnectTimer?.cancel();
@@ -174,6 +195,44 @@ class MediaDetectionService {
 
     // Start polling for current song every 1 second as backup
     _startPolling();
+
+    // Start health check timer to detect if service was killed by system
+    _startHealthCheck();
+  }
+
+  /// Start periodic health check to detect if service was killed
+  void _startHealthCheck() {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (!_isListening) return;
+
+      try {
+        // Check if service is still running
+        final isRunning = await isServiceRunning();
+        if (!isRunning && _isListening) {
+          if (kDebugMode) {
+            debugPrint(
+              'Health check: Service not running, attempting to reconnect...',
+            );
+          }
+          // Force reconnect
+          _subscription?.cancel();
+          _reconnectTimer?.cancel();
+          _reconnectTimer = Timer(const Duration(seconds: 1), () {
+            startListening();
+          });
+        } else if (isRunning) {
+          // Service is running, just verify we can get current song
+          final song = await getCurrentPlayingSong();
+          if (song != null && song.id != _currentSong?.id) {
+            _songController.add(song);
+          }
+          _lastSuccessfulSongDetection = DateTime.now();
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Health check error: $e');
+      }
+    });
   }
 
   /// Immediately fetch the current song on startup
@@ -212,13 +271,45 @@ class MediaDetectionService {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    // Reduced polling interval from 3s to 1s for faster detection
-    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+    if (kDebugMode) debugPrint('📡 POLLING: Started (every 500ms)');
+    int pollCount = 0;
+    // Reduced polling interval from 1s to 500ms for faster detection
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 500), (_) async {
       if (!_isListening) return;
       try {
         final song = await getCurrentPlayingSong();
-        if (song != null && song.id != _currentSong?.id) {
-          _songController.add(song);
+        pollCount++;
+        // Log every 20th poll to avoid spam
+        if (kDebugMode && pollCount % 20 == 0) {
+          debugPrint(
+            '📡 POLL #$pollCount: song=${song?.title ?? "null"}, current=${_currentSong?.title ?? "null"}',
+          );
+        }
+        if (song != null) {
+          if (song.id != _currentSong?.id) {
+            if (kDebugMode) {
+              debugPrint(
+                '🔄 POLLING: Song changed from "${_currentSong?.title}" to "${song.title}"',
+              );
+            }
+            _currentSong = song; // Update current song after change detection
+            _songController.add(song);
+          }
+
+          // ALWAYS emit position updates from polling
+          // This is critical when NLS event channel is dead (MIUI kills the service)
+          if (!_positionController.isClosed) {
+            _positionController.add(
+              PlaybackPosition(
+                position: _currentPosition,
+                duration: _currentDuration,
+                isPlaying: _isPlaying,
+              ),
+            );
+          }
+          if (!_playbackController.isClosed && _isPlaying != isPlaying) {
+            _playbackController.add(_isPlaying);
+          }
         }
       } catch (e) {
         if (kDebugMode) debugPrint('Polling error: $e');
@@ -235,6 +326,8 @@ class MediaDetectionService {
     _reconnectTimer = null;
     _pollTimer?.cancel();
     _pollTimer = null;
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
   }
 
   void _handleMediaEvent(dynamic event) {
@@ -366,6 +459,7 @@ class MediaDetectionService {
     _positionController.close();
     _reconnectTimer?.cancel();
     _pollTimer?.cancel();
+    _healthCheckTimer?.cancel();
   }
 
   /// Manually trigger song identification using audio fingerprinting

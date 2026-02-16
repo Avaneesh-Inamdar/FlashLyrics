@@ -65,10 +65,12 @@ class MediaNotifier extends StateNotifier<MediaState> {
   }) : _service = service,
        _lyricsNotifier = lyricsNotifier,
        super(const MediaState()) {
+    if (kDebugMode) debugPrint('🟢 MediaNotifier CREATED');
     _initialize();
   }
 
   Future<void> _initialize() async {
+    if (kDebugMode) debugPrint('🟢 MediaNotifier._initialize() called');
     await checkPermissions();
   }
 
@@ -76,6 +78,11 @@ class MediaNotifier extends StateNotifier<MediaState> {
   Future<void> checkPermissions() async {
     final hasPermission = await MediaDetectionService.checkNotificationAccess();
     final isRunning = await MediaDetectionService.isServiceRunning();
+    if (kDebugMode) {
+      debugPrint(
+        '🔑 checkPermissions: hasPermission=$hasPermission, isRunning=$isRunning, isListening=${state.isListening}',
+      );
+    }
 
     state = state.copyWith(
       hasPermission: hasPermission,
@@ -84,6 +91,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
 
     // Auto-start listening if permission granted
     if (hasPermission && !state.isListening) {
+      if (kDebugMode) debugPrint('🔑 Auto-starting listening...');
       startListening();
     }
   }
@@ -111,12 +119,20 @@ class MediaNotifier extends StateNotifier<MediaState> {
     );
 
     if (refreshLyrics) {
-      await _lyricsNotifier.setSong(song, forceRefresh: true);
+      // Only force-refresh if it's a DIFFERENT song than what we already have lyrics for
+      final currentId = state.currentSong?.id;
+      final existingLyricsId = _lyricsNotifier.state.currentSong?.id;
+      final hasLyrics = _lyricsNotifier.state.lyrics != null;
+
+      if (currentId != existingLyricsId || !hasLyrics) {
+        await _lyricsNotifier.setSong(song, forceRefresh: true);
+      }
     }
   }
 
   /// Start listening for media updates
   Future<void> startListening() async {
+    if (kDebugMode) debugPrint('▶️ MediaNotifier.startListening() called');
     _service.startListening();
 
     _songSubscription?.cancel();
@@ -191,8 +207,10 @@ class MediaNotifier extends StateNotifier<MediaState> {
 
   @override
   void dispose() {
-    stopListening();
-    _service.dispose();
+    _songSubscription?.cancel();
+    _playbackSubscription?.cancel();
+    _positionSubscription?.cancel();
+    // Do NOT dispose the service here — its lifecycle is managed by mediaDetectionServiceProvider
     super.dispose();
   }
 }
