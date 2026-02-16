@@ -27,9 +27,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
-    });
   }
 
   void _onSearchChanged() {
@@ -66,6 +63,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(searchFocusTriggerProvider, (previous, next) {
+      if (previous != next && mounted) {
+        _focusNode.requestFocus();
+      }
+    });
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDark
         ? AppTheme.backgroundColor
@@ -258,7 +261,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(color: AppTheme.primaryColor),
+          CircularProgressIndicator(color: AppTheme.primaryColor),
           const SizedBox(height: 16),
           Text(
             'Searching across all providers...',
@@ -519,7 +522,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                       ),
                                       child: Text(
                                         result.source,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                           color: AppTheme.primaryLight,

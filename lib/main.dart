@@ -52,6 +52,9 @@ class FlashLyricsApp extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final themeMode = _getThemeMode(settings.themeMode);
 
+    // Apply user-selected accent palette
+    AppTheme.setAccentPalette(settings.accentColor);
+
     // Determine if dark based on theme mode and system brightness
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final isDark =

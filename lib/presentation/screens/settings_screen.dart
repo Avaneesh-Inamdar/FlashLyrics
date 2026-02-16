@@ -116,6 +116,15 @@ class SettingsScreen extends ConsumerWidget {
                         _buildDivider(context),
                         _buildTapTile(
                           context,
+                          icon: Icons.brush_rounded,
+                          title: 'Accent Color',
+                          subtitle: settings.accentColorLabel,
+                          onTap: () =>
+                              _showAccentColorDialog(context, ref, settings),
+                        ),
+                        _buildDivider(context),
+                        _buildTapTile(
+                          context,
                           icon: Icons.text_fields_rounded,
                           title: 'Font Size',
                           subtitle: settings.fontSizeLabel,
@@ -915,6 +924,140 @@ class SettingsScreen extends ConsumerWidget {
                               Expanded(
                                 child: Text(
                                   option.$2,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : textPrimary,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.circle_outlined,
+                                color: isSelected ? Colors.white : textHint,
+                                size: 22,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAccentColorDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
+    final surfaceLight = isDark
+        ? AppTheme.surfaceLight
+        : AppTheme.lightSurfaceLight;
+    final textPrimary = isDark
+        ? AppTheme.textPrimary
+        : AppTheme.lightTextPrimary;
+    final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
+
+    final accentOptions = AppSettings.accentColorNames.entries.toList();
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    surfaceColor.withValues(alpha: 0.9),
+                    surfaceLight.withValues(alpha: 0.8),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Accent Color',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ...accentOptions.map((option) {
+                    final key = option.key;
+                    final label = option.value;
+                    final palette = AppTheme.accentPalettes[key];
+                    final isSelected = settings.accentColor == key;
+
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          ref
+                              .read(settingsProvider.notifier)
+                              .setAccentColor(key);
+                          Navigator.pop(context);
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            gradient: isSelected
+                                ? AppTheme.primaryGradient
+                                : null,
+                            color: isSelected
+                                ? null
+                                : surfaceLight.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color:
+                                      palette?.primary ?? AppTheme.primaryColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  label,
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,

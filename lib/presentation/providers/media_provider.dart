@@ -98,6 +98,23 @@ class MediaNotifier extends StateNotifier<MediaState> {
     return await _service.getCurrentPlayingSong();
   }
 
+  /// Force refresh for current song and lyrics
+  Future<void> refreshCurrentSong({bool refreshLyrics = true}) async {
+    final song = await _service.getCurrentPlayingSong();
+    if (song == null) return;
+
+    state = state.copyWith(
+      currentSong: song,
+      isPlaying: _service.isPlaying,
+      currentPosition: _service.currentPosition,
+      currentDuration: _service.currentDuration,
+    );
+
+    if (refreshLyrics) {
+      await _lyricsNotifier.setSong(song, forceRefresh: true);
+    }
+  }
+
   /// Start listening for media updates
   Future<void> startListening() async {
     _service.startListening();

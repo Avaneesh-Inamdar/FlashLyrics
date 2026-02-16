@@ -52,7 +52,7 @@ class PermissionCard extends StatelessWidget {
               const SizedBox(height: 28),
               // Title with gradient effect
               ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
+                shaderCallback: (bounds) => LinearGradient(
                   colors: [AppTheme.textPrimary, AppTheme.primaryLight],
                 ).createShader(bounds),
                 child: const Text(
@@ -127,7 +127,7 @@ class PermissionCard extends StatelessWidget {
               ),
             ],
           ),
-          child: const Center(
+          child: Center(
             child: Icon(
               Icons.notifications_active_rounded,
               size: 44,

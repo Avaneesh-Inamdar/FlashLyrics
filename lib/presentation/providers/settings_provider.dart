@@ -13,12 +13,14 @@ class AppSettings {
   final bool showSyncedLyrics;
   final ThemeModeOption themeMode;
   final List<String> providerPriority;
+  final String accentColor;
 
   const AppSettings({
     this.fontSize = 18.0,
     this.autoRefresh = true,
     this.showSyncedLyrics = true,
     this.themeMode = ThemeModeOption.auto,
+    this.accentColor = 'emerald',
     this.providerPriority = const [
       'lrclib',
       'textyl',
@@ -51,18 +53,29 @@ class AppSettings {
     'netease': 'NetEase Music',
   };
 
+  /// Accent color options
+  static const Map<String, String> accentColorNames = {
+    'emerald': 'Emerald',
+    'cobalt': 'Cobalt',
+    'orchard': 'Orchard',
+    'amber': 'Amber',
+    'crimson': 'Crimson',
+  };
+
   AppSettings copyWith({
     double? fontSize,
     bool? autoRefresh,
     bool? showSyncedLyrics,
     ThemeModeOption? themeMode,
     List<String>? providerPriority,
+    String? accentColor,
   }) {
     return AppSettings(
       fontSize: fontSize ?? this.fontSize,
       autoRefresh: autoRefresh ?? this.autoRefresh,
       showSyncedLyrics: showSyncedLyrics ?? this.showSyncedLyrics,
       themeMode: themeMode ?? this.themeMode,
+      accentColor: accentColor ?? this.accentColor,
       providerPriority: providerPriority ?? this.providerPriority,
     );
   }
@@ -72,6 +85,7 @@ class AppSettings {
     'autoRefresh': autoRefresh,
     'showSyncedLyrics': showSyncedLyrics,
     'themeMode': themeMode.name,
+    'accentColor': accentColor,
     'providerPriority': providerPriority,
   };
 
@@ -96,6 +110,7 @@ class AppSettings {
       autoRefresh: json['autoRefresh'] as bool? ?? true,
       showSyncedLyrics: json['showSyncedLyrics'] as bool? ?? true,
       themeMode: parseThemeMode(json['themeMode']),
+      accentColor: json['accentColor'] as String? ?? 'emerald',
       providerPriority:
           (json['providerPriority'] as List<dynamic>?)
               ?.map((e) => e as String)
@@ -125,6 +140,8 @@ class AppSettings {
     }
     return 'Custom';
   }
+
+  String get accentColorLabel => accentColorNames[accentColor] ?? 'Custom';
 }
 
 /// Settings state notifier
@@ -169,6 +186,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setThemeMode(ThemeModeOption mode) {
     state = state.copyWith(themeMode: mode);
+    _saveSettings();
+  }
+
+  void setAccentColor(String key) {
+    state = state.copyWith(accentColor: key);
     _saveSettings();
   }
 

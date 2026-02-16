@@ -150,3 +150,6 @@ class TabIndexNotifier extends StateNotifier<int> {
 final tabIndexProvider = StateNotifierProvider<TabIndexNotifier, int>((ref) {
   return TabIndexNotifier();
 });
+
+/// Search focus trigger (increment to request focus)
+final searchFocusTriggerProvider = StateProvider<int>((ref) => 0);

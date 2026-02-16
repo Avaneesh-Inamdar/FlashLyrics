@@ -114,8 +114,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () async {
               // Fetch current song and lyrics
               try {
-                ref.read(lyricsNotifierProvider.notifier).clear();
-                await _initializeCurrentSong();
+                await ref
+                    .read(mediaNotifierProvider.notifier)
+                    .refreshCurrentSong();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

@@ -32,13 +32,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
     return Scaffold(
       extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        transitionBuilder: (child, animation) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        child: _screens[currentIndex],
-      ),
+      body: IndexedStack(index: currentIndex, children: _screens),
       bottomNavigationBar: _buildBottomNavigationBar(isDark, currentIndex),
     );
   }
@@ -134,7 +128,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final isSelected = currentIndex == index;
 
     return GestureDetector(
-      onTap: () => ref.read(tabIndexProvider.notifier).setIndex(index),
+      onTap: () {
+        if (index == 1 && currentIndex == 1) {
+          ref.read(searchFocusTriggerProvider.notifier).state++;
+          return;
+        }
+        ref.read(tabIndexProvider.notifier).setIndex(index);
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),

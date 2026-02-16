@@ -86,9 +86,23 @@ class LyricsRemoteDataSource {
     final cleanTitle = _normalizeText(title, isNonLatin: isNonLatin);
     final songId = _generateSongId(artist, title);
     final errors = <String>[];
-    final priority = providerPriority ?? ApiConstants.apiPriority;
 
-    // Try each API in priority order - first with original text
+    // For non-Latin songs, prioritize NetEase which has better Asian music support
+    List<String> priority;
+    if (isNonLatin) {
+      priority = [
+        'netease',
+        'lrclib',
+        'textyl',
+        'lyrics.ovh',
+        'lyrist',
+        'chartlyrics',
+      ];
+    } else {
+      priority = providerPriority ?? ApiConstants.apiPriority;
+    }
+
+    // Strategy 1: Try with original text
     for (final api in priority) {
       try {
         final result = await _fetchFromApi(api, artist, title, songId);
@@ -115,7 +129,7 @@ class LyricsRemoteDataSource {
       }
     }
 
-    // If no results, try with cleaned/normalized text (helps for Hindi/non-English)
+    // Strategy 2: Try with cleaned/normalized text (helps for Hindi/non-English)
     if (cleanArtist != artist || cleanTitle != title) {
       for (final api in priority) {
         try {
@@ -130,6 +144,34 @@ class LyricsRemoteDataSource {
           }
         } catch (e) {
           continue; // Silently continue, we already recorded errors above
+        }
+      }
+    }
+
+    // Strategy 3: For Hindi songs, try with just the title (artist info for Hindi songs is often incomplete)
+    if (isNonLatin) {
+      for (final api in priority) {
+        try {
+          final result = await _fetchFromApi(api, '', title, songId);
+          if (result != null && result.plainLyrics.isNotEmpty) {
+            return result;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      // Try with cleaned title only
+      if (cleanTitle != title) {
+        for (final api in priority) {
+          try {
+            final result = await _fetchFromApi(api, '', cleanTitle, songId);
+            if (result != null && result.plainLyrics.isNotEmpty) {
+              return result;
+            }
+          } catch (e) {
+            continue;
+          }
         }
       }
     }

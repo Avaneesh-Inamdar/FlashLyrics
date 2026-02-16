@@ -72,6 +72,13 @@ class SongCard extends StatelessWidget {
   }
 
   Widget _buildAlbumArt() {
+    // Debug: Print artwork URL to console
+    if (song.artworkUrl != null && song.artworkUrl!.isNotEmpty) {
+      debugPrint('🎨 Album art URL: ${song.artworkUrl}');
+    } else {
+      debugPrint('🎨 No album art URL available for: ${song.title}');
+    }
+
     return Container(
           width: 72,
           height: 72,
@@ -87,11 +94,41 @@ class SongCard extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: song.artworkUrl != null
+            child: (song.artworkUrl != null && song.artworkUrl!.isNotEmpty)
                 ? Image.network(
                     song.artworkUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _buildArtPlaceholder(),
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primaryColor.withValues(alpha: 0.2),
+                              AppTheme.primaryDark.withValues(alpha: 0.3),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                : null,
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppTheme.primaryColor,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('🎨 Failed to load album art: $error');
+                      return _buildArtPlaceholder();
+                    },
                   )
                 : _buildArtPlaceholder(),
           ),
@@ -133,7 +170,7 @@ class SongCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
+          shaderCallback: (bounds) => LinearGradient(
             colors: [AppTheme.textPrimary, AppTheme.primaryLight],
           ).createShader(bounds),
           child: Text(

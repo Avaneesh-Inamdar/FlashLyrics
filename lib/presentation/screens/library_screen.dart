@@ -153,7 +153,7 @@ class LibraryScreen extends ConsumerWidget {
                       width: 2,
                     ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.library_music_rounded,
                     size: 56,
                     color: AppTheme.primaryLight,

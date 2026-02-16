@@ -1,64 +1,126 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+class AccentPalette {
+  final Color primary;
+  final Color primaryLight;
+  final Color primaryDark;
+  final Color secondary;
+  final Color accent;
+
+  const AccentPalette({
+    required this.primary,
+    required this.primaryLight,
+    required this.primaryDark,
+    required this.secondary,
+    required this.accent,
+  });
+}
+
 /// App theme configuration with modern, efficient styling
 /// Supports both dark and light modes
 class AppTheme {
   AppTheme._();
 
-  // Color palette - Refined for depth and elegance (Dark Mode)
-  static const Color primaryColor = Color(0xFF8B5CF6); // Vibrant purple
-  static const Color primaryLight = Color(0xFFa78bfa); // Light purple
-  static const Color primaryDark = Color(0xFF7C3AED); // Deep purple
-  static const Color secondaryColor = Color(0xFF06B6D4); // Cyan
-  static const Color accentColor = Color(0xFFF472B6); // Pink accent
-  static const Color backgroundColor = Color(0xFF0F0F13); // Deep dark
-  static const Color surfaceColor = Color(0xFF1A1A23); // Elevated surface
-  static const Color surfaceLight = Color(0xFF252532); // Lighter surface
+  static const Map<String, AccentPalette> _accentPalettes = {
+    'emerald': AccentPalette(
+      primary: Color(0xFF10B981),
+      primaryLight: Color(0xFF6EE7B7),
+      primaryDark: Color(0xFF047857),
+      secondary: Color(0xFF0EA5E9),
+      accent: Color(0xFFF59E0B),
+    ),
+    'cobalt': AccentPalette(
+      primary: Color(0xFF3B82F6),
+      primaryLight: Color(0xFF93C5FD),
+      primaryDark: Color(0xFF1D4ED8),
+      secondary: Color(0xFF22D3EE),
+      accent: Color(0xFFF97316),
+    ),
+    'orchard': AccentPalette(
+      primary: Color(0xFF22C55E),
+      primaryLight: Color(0xFF86EFAC),
+      primaryDark: Color(0xFF15803D),
+      secondary: Color(0xFFF97316),
+      accent: Color(0xFFF43F5E),
+    ),
+    'amber': AccentPalette(
+      primary: Color(0xFFF59E0B),
+      primaryLight: Color(0xFFFCD34D),
+      primaryDark: Color(0xFFB45309),
+      secondary: Color(0xFF10B981),
+      accent: Color(0xFFFB7185),
+    ),
+    'crimson': AccentPalette(
+      primary: Color(0xFFEF4444),
+      primaryLight: Color(0xFFFCA5A5),
+      primaryDark: Color(0xFFB91C1C),
+      secondary: Color(0xFFF97316),
+      accent: Color(0xFFFDE68A),
+    ),
+  };
+
+  static AccentPalette _palette = _accentPalettes['emerald']!;
+
+  static Map<String, AccentPalette> get accentPalettes => _accentPalettes;
+
+  static void setAccentPalette(String key) {
+    _palette = _accentPalettes[key] ?? _accentPalettes['emerald']!;
+  }
+
+  // Accent colors (dynamic)
+  static Color get primaryColor => _palette.primary;
+  static Color get primaryLight => _palette.primaryLight;
+  static Color get primaryDark => _palette.primaryDark;
+  static Color get secondaryColor => _palette.secondary;
+  static Color get accentColor => _palette.accent;
+  static const Color backgroundColor = Color(0xFF0A0A0B); // Near black
+  static const Color surfaceColor = Color(0xFF111115); // Elevated surface
+  static const Color surfaceLight = Color(0xFF1A1A21); // Lighter surface
   static const Color errorColor = Color(0xFFEF4444); // Red
   static const Color successColor = Color(0xFF22C55E); // Green
 
   // Text colors (Dark Mode)
-  static const Color textPrimary = Color(0xFFF8FAFC); // Almost white
-  static const Color textSecondary = Color(0xFF94A3B8); // Slate
-  static const Color textHint = Color(0xFF64748B); // Muted slate
+  static const Color textPrimary = Color(0xFFF5F5F7); // Soft white
+  static const Color textSecondary = Color(0xFFB3B3C2); // Muted gray
+  static const Color textHint = Color(0xFF7A7A8C); // Subtle gray
 
   // Light Mode Colors
-  static const Color lightBackground = Color(0xFFF8F9FC);
+  static const Color lightBackground = Color(0xFFFDFBF7);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightSurfaceLight = Color(0xFFF1F3F8);
-  static const Color lightTextPrimary = Color(0xFF1A1A2E);
-  static const Color lightTextSecondary = Color(0xFF4A4A6A);
-  static const Color lightTextHint = Color(0xFF9A9AB0);
+  static const Color lightSurfaceLight = Color(0xFFF3F0E8);
+  static const Color lightTextPrimary = Color(0xFF1A1A1A);
+  static const Color lightTextSecondary = Color(0xFF4B4B4B);
+  static const Color lightTextHint = Color(0xFF8C8C8C);
 
   // Light Mode Gradients
   static const LinearGradient lightBackgroundGradient = LinearGradient(
-    colors: [Color(0xFFF8F9FC), Color(0xFFEEF1F8)],
+    colors: [Color(0xFFFDFBF7), Color(0xFFF2EDE4)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient lightCardGradient = LinearGradient(
-    colors: [Color(0xFFFFFFFF), Color(0xFFF8F9FC)],
+    colors: [Color(0xFFFFFFFF), Color(0xFFF7F2E8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   // Gradient presets
-  static const LinearGradient primaryGradient = LinearGradient(
+  static LinearGradient get primaryGradient => LinearGradient(
     colors: [primaryColor, primaryLight],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFF0F0F13), Color(0xFF1A1A23)],
+    colors: [Color(0xFF0A0A0B), Color(0xFF121217)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF1F1F2E), Color(0xFF16161F)],
+    colors: [Color(0xFF141418), Color(0xFF0D0D10)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -77,7 +139,7 @@ class AppTheme {
       brightness: Brightness.dark,
       primaryColor: primaryColor,
       scaffoldBackgroundColor: backgroundColor,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: ColorScheme.dark(
         primary: primaryColor,
         secondary: secondaryColor,
         tertiary: accentColor,
@@ -94,7 +156,7 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
         iconTheme: const IconThemeData(color: textPrimary),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.spaceGrotesk(
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -116,7 +178,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.spaceGrotesk(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -130,7 +192,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.spaceGrotesk(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -139,7 +201,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primaryColor,
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.spaceGrotesk(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -159,13 +221,13 @@ class AppTheme {
         indicatorColor: primaryColor.withValues(alpha: 0.2),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.inter(
+            return GoogleFonts.spaceGrotesk(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: primaryColor,
             );
           }
-          return GoogleFonts.inter(
+          return GoogleFonts.spaceGrotesk(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: textHint,
@@ -173,9 +235,9 @@ class AppTheme {
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: primaryColor, size: 24);
+            return IconThemeData(color: primaryColor, size: 24);
           }
-          return const IconThemeData(color: textHint, size: 24);
+          return IconThemeData(color: textHint, size: 24);
         }),
         height: 70,
         elevation: 0,
@@ -183,14 +245,14 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surfaceLight,
-        hintStyle: GoogleFonts.inter(color: textHint),
+        hintStyle: GoogleFonts.spaceGrotesk(color: textHint),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: primaryColor, width: 2),
+          borderSide: BorderSide(color: primaryColor, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
@@ -199,14 +261,14 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: surfaceLight,
-        contentTextStyle: GoogleFonts.inter(color: textPrimary),
+        contentTextStyle: GoogleFonts.spaceGrotesk(color: textPrimary),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: surfaceColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.spaceGrotesk(
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: textPrimary,
@@ -230,7 +292,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: const ColorScheme.light(
+      colorScheme: ColorScheme.light(
         primary: primaryColor,
         secondary: secondaryColor,
         surface: lightSurface,
@@ -247,7 +309,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.spaceGrotesk(
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: lightTextPrimary,
@@ -270,7 +332,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.spaceGrotesk(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -284,7 +346,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.spaceGrotesk(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -293,7 +355,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primaryColor,
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.spaceGrotesk(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -313,13 +375,13 @@ class AppTheme {
         indicatorColor: primaryColor.withValues(alpha: 0.15),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.inter(
+            return GoogleFonts.spaceGrotesk(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: primaryColor,
             );
           }
-          return GoogleFonts.inter(
+          return GoogleFonts.spaceGrotesk(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: lightTextHint,
@@ -327,9 +389,9 @@ class AppTheme {
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: primaryColor, size: 24);
+            return IconThemeData(color: primaryColor, size: 24);
           }
-          return const IconThemeData(color: lightTextHint, size: 24);
+          return IconThemeData(color: lightTextHint, size: 24);
         }),
         height: 70,
         elevation: 0,
@@ -337,14 +399,14 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: lightSurfaceLight,
-        hintStyle: GoogleFonts.inter(color: lightTextHint),
+        hintStyle: GoogleFonts.spaceGrotesk(color: lightTextHint),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: primaryColor, width: 2),
+          borderSide: BorderSide(color: primaryColor, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
@@ -353,14 +415,14 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: lightSurfaceLight,
-        contentTextStyle: GoogleFonts.inter(color: lightTextPrimary),
+        contentTextStyle: GoogleFonts.spaceGrotesk(color: lightTextPrimary),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: lightSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.spaceGrotesk(
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: lightTextPrimary,
@@ -379,89 +441,89 @@ class AppTheme {
     );
   }
 
-  /// Build custom text theme with Inter font
+  /// Build custom text theme with Space Grotesk
   static TextTheme _buildTextTheme() {
     return TextTheme(
-      displayLarge: GoogleFonts.inter(
+      displayLarge: GoogleFonts.spaceGrotesk(
         fontSize: 56,
         fontWeight: FontWeight.w800,
         color: textPrimary,
         letterSpacing: -1.5,
       ),
-      displayMedium: GoogleFonts.inter(
+      displayMedium: GoogleFonts.spaceGrotesk(
         fontSize: 44,
         fontWeight: FontWeight.w700,
         color: textPrimary,
         letterSpacing: -1,
       ),
-      displaySmall: GoogleFonts.inter(
+      displaySmall: GoogleFonts.spaceGrotesk(
         fontSize: 36,
         fontWeight: FontWeight.w700,
         color: textPrimary,
         letterSpacing: -0.5,
       ),
-      headlineLarge: GoogleFonts.inter(
+      headlineLarge: GoogleFonts.spaceGrotesk(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         color: textPrimary,
         letterSpacing: -0.5,
       ),
-      headlineMedium: GoogleFonts.inter(
+      headlineMedium: GoogleFonts.spaceGrotesk(
         fontSize: 28,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      headlineSmall: GoogleFonts.inter(
+      headlineSmall: GoogleFonts.spaceGrotesk(
         fontSize: 24,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      titleLarge: GoogleFonts.inter(
+      titleLarge: GoogleFonts.spaceGrotesk(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      titleMedium: GoogleFonts.inter(
+      titleMedium: GoogleFonts.spaceGrotesk(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: textPrimary,
         letterSpacing: 0.1,
       ),
-      titleSmall: GoogleFonts.inter(
+      titleSmall: GoogleFonts.spaceGrotesk(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: textPrimary,
         letterSpacing: 0.1,
       ),
-      bodyLarge: GoogleFonts.inter(
+      bodyLarge: GoogleFonts.spaceGrotesk(
         fontSize: 16,
         fontWeight: FontWeight.w400,
         color: textPrimary,
         height: 1.5,
       ),
-      bodyMedium: GoogleFonts.inter(
+      bodyMedium: GoogleFonts.spaceGrotesk(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: textPrimary,
         height: 1.5,
       ),
-      bodySmall: GoogleFonts.inter(
+      bodySmall: GoogleFonts.spaceGrotesk(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: textSecondary,
         height: 1.4,
       ),
-      labelLarge: GoogleFonts.inter(
+      labelLarge: GoogleFonts.spaceGrotesk(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      labelMedium: GoogleFonts.inter(
+      labelMedium: GoogleFonts.spaceGrotesk(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: textSecondary,
       ),
-      labelSmall: GoogleFonts.inter(
+      labelSmall: GoogleFonts.spaceGrotesk(
         fontSize: 11,
         fontWeight: FontWeight.w500,
         color: textHint,
@@ -473,86 +535,86 @@ class AppTheme {
   /// Build light text theme
   static TextTheme _buildLightTextTheme() {
     return TextTheme(
-      displayLarge: GoogleFonts.inter(
+      displayLarge: GoogleFonts.spaceGrotesk(
         fontSize: 56,
         fontWeight: FontWeight.w800,
         color: lightTextPrimary,
         letterSpacing: -1.5,
       ),
-      displayMedium: GoogleFonts.inter(
+      displayMedium: GoogleFonts.spaceGrotesk(
         fontSize: 44,
         fontWeight: FontWeight.w700,
         color: lightTextPrimary,
         letterSpacing: -1,
       ),
-      displaySmall: GoogleFonts.inter(
+      displaySmall: GoogleFonts.spaceGrotesk(
         fontSize: 36,
         fontWeight: FontWeight.w700,
         color: lightTextPrimary,
         letterSpacing: -0.5,
       ),
-      headlineLarge: GoogleFonts.inter(
+      headlineLarge: GoogleFonts.spaceGrotesk(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         color: lightTextPrimary,
         letterSpacing: -0.5,
       ),
-      headlineMedium: GoogleFonts.inter(
+      headlineMedium: GoogleFonts.spaceGrotesk(
         fontSize: 28,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      headlineSmall: GoogleFonts.inter(
+      headlineSmall: GoogleFonts.spaceGrotesk(
         fontSize: 24,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      titleLarge: GoogleFonts.inter(
+      titleLarge: GoogleFonts.spaceGrotesk(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      titleMedium: GoogleFonts.inter(
+      titleMedium: GoogleFonts.spaceGrotesk(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
         letterSpacing: 0.1,
       ),
-      titleSmall: GoogleFonts.inter(
+      titleSmall: GoogleFonts.spaceGrotesk(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
         letterSpacing: 0.1,
       ),
-      bodyLarge: GoogleFonts.inter(
+      bodyLarge: GoogleFonts.spaceGrotesk(
         fontSize: 16,
         fontWeight: FontWeight.w400,
         color: lightTextPrimary,
         height: 1.5,
       ),
-      bodyMedium: GoogleFonts.inter(
+      bodyMedium: GoogleFonts.spaceGrotesk(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: lightTextPrimary,
         height: 1.5,
       ),
-      bodySmall: GoogleFonts.inter(
+      bodySmall: GoogleFonts.spaceGrotesk(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: lightTextSecondary,
         height: 1.4,
       ),
-      labelLarge: GoogleFonts.inter(
+      labelLarge: GoogleFonts.spaceGrotesk(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      labelMedium: GoogleFonts.inter(
+      labelMedium: GoogleFonts.spaceGrotesk(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: lightTextSecondary,
       ),
-      labelSmall: GoogleFonts.inter(
+      labelSmall: GoogleFonts.spaceGrotesk(
         fontSize: 11,
         fontWeight: FontWeight.w500,
         color: lightTextHint,
