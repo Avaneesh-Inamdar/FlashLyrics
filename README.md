@@ -74,7 +74,3 @@ Spotify, YouTube Music, Apple Music, Amazon Music, SoundCloud, Deezer, Tidal, Ji
 | NetEase | Plain | Strong for Asian music |
 
 All sources are free and don't require API keys.
-
-## License
-
-This project is for personal/educational use.
