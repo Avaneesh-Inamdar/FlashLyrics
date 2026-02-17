@@ -12,12 +12,20 @@ Grab the latest APK from [Releases](https://github.com/Avaneesh-Inamdar/FlashLyr
 
 ## Features
 
-### 🎵 Auto-detect & Synced Lyrics
+### � Light & Dark Mode
 
-Automatically detects the currently playing song using Android's MediaSession and shows synced lyrics that scroll in real time. Falls back to plain lyrics if synced aren't available. Pulls from 6 sources in parallel — so it's fast.
+Fully supports light and dark themes so it looks great no matter your preference.
 
 <p align="center">
-  <img src="Images/Library1.jpeg" alt="Lyrics View" width="250" />
+  <img src="Images/Light%20and%20Dark%20Mode.jpeg" alt="Light and Dark Mode" width="250" />
+</p>
+
+### 📚 Offline Library
+
+All lyrics you've viewed are cached locally. Access your entire library offline — instantly.
+
+<p align="center">
+  <img src="Images/Library1.jpeg" alt="Lyrics Library" width="250" />
 </p>
 
 ### 🔍 Manual Search
@@ -26,14 +34,6 @@ Can't find a song automatically? Search for any song by title or artist and get 
 
 <p align="center">
   <img src="Images/Search%20Feature.jpeg" alt="Search Feature" width="250" />
-</p>
-
-### 🌗 Light & Dark Mode
-
-Fully supports light and dark themes so it looks great no matter your preference.
-
-<p align="center">
-  <img src="Images/Light%20and%20Dark%20Mode.jpeg" alt="Light and Dark Mode" width="250" />
 </p>
 
 ### 🎨 Accent Color Customization
@@ -46,8 +46,9 @@ Personalize the app with your choice of accent colors to match your style.
 
 ### More
 
+- **Auto-detects** the currently playing song using Android's MediaSession
+- **Synced lyrics** that scroll in real time (falls back to plain lyrics)
 - Pulls lyrics from **6 different sources** — LRCLIB, Textyl, ChartLyrics, Lyrics.ovh, Lyrist, NetEase
-- **Offline cache** — lyrics you've seen before load instantly
 - **Share lyrics** as a styled image or plain text
 - **Album art** pulled from the playing app
 - Works with **Hindi, Japanese, Korean, Chinese** songs (NetEase covers Asian music well)
