@@ -10,6 +10,18 @@ Android app that detects what song you're playing and shows the lyrics. Works wi
 
 Grab the latest APK from [Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases).
 
+## Screenshots
+
+<p align="center">
+  <img src="Images/Library.jpeg" alt="Lyrics Library" width="200" />
+  &nbsp;&nbsp;
+  <img src="Images/Search%20Feature.jpeg" alt="Search Feature" width="200" />
+  &nbsp;&nbsp;
+  <img src="Images/Light%20and%20Dark%20Mode.jpeg" alt="Light and Dark Mode" width="200" />
+  &nbsp;&nbsp;
+  <img src="Images/AccentColor.jpeg" alt="Accent Color Customization" width="200" />
+</p>
+
 ## What it does
 
 - Detects the currently playing song automatically (uses Android's MediaSession + NotificationListener)
