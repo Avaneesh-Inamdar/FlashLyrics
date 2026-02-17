@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon/Icon.png" alt="FlashLyrics Logo" width="120" height="120" style="border-radius: 50%;" />
+</p>
+
 # FlashLyrics
 
 Android app that detects what song you're playing and shows the lyrics. Works with Spotify, YouTube Music, Apple Music, JioSaavn, Gaana, SoundCloud, and pretty much any music app.
