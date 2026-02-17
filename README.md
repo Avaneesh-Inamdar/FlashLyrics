@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon/Icon.png" alt="FlashLyrics Logo" width="120" height="120" style="border-radius: 50%;" />
+  <img src="icon/Icon-round.png" alt="FlashLyrics Logo" width="120" height="120" />
 </p>
 
 # FlashLyrics
