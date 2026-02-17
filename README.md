@@ -17,7 +17,7 @@ Grab the latest APK from [Releases](https://github.com/Avaneesh-Inamdar/FlashLyr
 Automatically detects the currently playing song using Android's MediaSession and shows synced lyrics that scroll in real time. Falls back to plain lyrics if synced aren't available. Pulls from 6 sources in parallel — so it's fast.
 
 <p align="center">
-  <img src="Images/Library.jpeg" alt="Lyrics View" width="250" />
+  <img src="Images/Library1.jpeg" alt="Lyrics View" width="250" />
 </p>
 
 ### 🔍 Manual Search
