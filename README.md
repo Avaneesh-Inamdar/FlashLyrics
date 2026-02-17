@@ -10,30 +10,47 @@ Android app that detects what song you're playing and shows the lyrics. Works wi
 
 Grab the latest APK from [Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases).
 
-## Screenshots
+## Features
+
+### 🎵 Auto-detect & Synced Lyrics
+
+Automatically detects the currently playing song using Android's MediaSession and shows synced lyrics that scroll in real time. Falls back to plain lyrics if synced aren't available. Pulls from 6 sources in parallel — so it's fast.
 
 <p align="center">
-  <img src="Images/Library.jpeg" alt="Lyrics Library" width="200" />
-  &nbsp;&nbsp;
-  <img src="Images/Search%20Feature.jpeg" alt="Search Feature" width="200" />
-  &nbsp;&nbsp;
-  <img src="Images/Light%20and%20Dark%20Mode.jpeg" alt="Light and Dark Mode" width="200" />
-  &nbsp;&nbsp;
-  <img src="Images/AccentColor.jpeg" alt="Accent Color Customization" width="200" />
+  <img src="Images/Library.jpeg" alt="Lyrics View" width="250" />
 </p>
 
-## What it does
+### 🔍 Manual Search
 
-- Detects the currently playing song automatically (uses Android's MediaSession + NotificationListener)
-- Shows synced lyrics that scroll with the song (when available)
-- Falls back to plain lyrics if synced aren't found
-- Pulls lyrics from 6 different sources — LRCLIB, Textyl, ChartLyrics, Lyrics.ovh, Lyrist, NetEase
-- All sources are hit in parallel so it's fast
-- Manual search if auto-detection doesn't pick something up
-- Offline cache — lyrics you've seen before load instantly
-- Share lyrics as a styled image or plain text
-- Album art from the playing app
-- Works with Hindi, Japanese, Korean, Chinese songs (NetEase covers Asian music well)
+Can't find a song automatically? Search for any song by title or artist and get lyrics instantly.
+
+<p align="center">
+  <img src="Images/Search%20Feature.jpeg" alt="Search Feature" width="250" />
+</p>
+
+### 🌗 Light & Dark Mode
+
+Fully supports light and dark themes so it looks great no matter your preference.
+
+<p align="center">
+  <img src="Images/Light%20and%20Dark%20Mode.jpeg" alt="Light and Dark Mode" width="250" />
+</p>
+
+### 🎨 Accent Color Customization
+
+Personalize the app with your choice of accent colors to match your style.
+
+<p align="center">
+  <img src="Images/AccentColor.jpeg" alt="Accent Color Customization" width="250" />
+</p>
+
+### More
+
+- Pulls lyrics from **6 different sources** — LRCLIB, Textyl, ChartLyrics, Lyrics.ovh, Lyrist, NetEase
+- **Offline cache** — lyrics you've seen before load instantly
+- **Share lyrics** as a styled image or plain text
+- **Album art** pulled from the playing app
+- Works with **Hindi, Japanese, Korean, Chinese** songs (NetEase covers Asian music well)
 
 ## Supported music apps
 
