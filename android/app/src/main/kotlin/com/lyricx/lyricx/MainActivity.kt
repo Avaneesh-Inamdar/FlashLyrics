@@ -80,6 +80,16 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(songData)
                 }
+                "seekTo" -> {
+                    val position = call.argument<Int>("position")?.toLong() ?: 0L
+                    val success = seekToPosition(position)
+                    result.success(success)
+                }
+                "setPlaying" -> {
+                    val playing = call.argument<Boolean>("playing") ?: false
+                    val success = setPlaybackState(playing)
+                    result.success(success)
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -413,6 +423,55 @@ class MainActivity : FlutterActivity() {
                     else -> "Media Player"
                 }
             }
+        }
+    }
+    
+    private fun seekToPosition(position: Long): Boolean {
+        return try {
+            val mediaSessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+            val sessionTokens = mediaSessionManager?.getActiveSessions(ComponentName(this, MediaNotificationListener::class.java))
+            
+            if (sessionTokens.isNullOrEmpty()) {
+                Log.d(TAG, "seekToPosition: No active media sessions")
+                return false
+            }
+            
+            val controller = sessionTokens[0]
+            val transportControls = controller.transportControls
+            
+            transportControls.seekTo(position)
+            Log.d(TAG, "seekToPosition: Seeked to $position ms")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "seekToPosition failed: ${e.message}")
+            false
+        }
+    }
+    
+    private fun setPlaybackState(playing: Boolean): Boolean {
+        return try {
+            val mediaSessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+            val sessionTokens = mediaSessionManager?.getActiveSessions(ComponentName(this, MediaNotificationListener::class.java))
+            
+            if (sessionTokens.isNullOrEmpty()) {
+                Log.d(TAG, "setPlaybackState: No active media sessions")
+                return false
+            }
+            
+            val controller = sessionTokens[0]
+            val transportControls = controller.transportControls
+            
+            if (playing) {
+                transportControls.play()
+                Log.d(TAG, "setPlaybackState: Sent play command")
+            } else {
+                transportControls.pause()
+                Log.d(TAG, "setPlaybackState: Sent pause command")
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "setPlaybackState failed: ${e.message}")
+            false
         }
     }
 }

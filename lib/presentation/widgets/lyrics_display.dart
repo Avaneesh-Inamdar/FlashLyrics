@@ -543,6 +543,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     // Dynamic height based on font size (larger fonts need more space)
     final dynamicHeight = 400 + (_syncedFontSize - 14) * 8;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final settings = ref.watch(settingsProvider);
 
     // Clean minimal styling - no gradients
     final backgroundColor = isDark
@@ -566,6 +567,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         isPlaying: widget.isPlaying,
         onSeek: widget.onSeek,
         fontSize: _syncedFontSize,
+        syncOffsetMs: settings.lyricsSyncOffset,
       ),
     ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.98, 0.98));
   }

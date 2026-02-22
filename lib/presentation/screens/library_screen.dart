@@ -204,12 +204,16 @@ class LibraryScreen extends ConsumerWidget {
     List<dynamic> lyricsList,
     bool isDark,
   ) {
+    // Sort by fetchedAt descending so newest songs appear at the top
+    final sortedList = List<dynamic>.from(lyricsList)
+      ..sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
+
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
       physics: const BouncingScrollPhysics(),
-      itemCount: lyricsList.length,
+      itemCount: sortedList.length,
       itemBuilder: (context, index) {
-        final lyrics = lyricsList[index];
+        final lyrics = sortedList[index];
         return _buildLyricsCard(context, lyrics, index, isDark);
       },
     );

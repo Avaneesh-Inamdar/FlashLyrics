@@ -10,6 +10,7 @@ import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/lyrics_display.dart';
 import '../widgets/song_card.dart';
+import '../widgets/song_controls.dart';
 import '../widgets/permission_card.dart';
 import 'search_screen.dart';
 
@@ -221,6 +222,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(height: 8),
             SongCard(song: lyricsState.currentSong!),
             const SizedBox(height: 16),
+            // Song controls with seek bar
+            if (mediaState.currentDuration.inMilliseconds > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: SongControls(
+                  currentPosition: mediaState.currentPosition,
+                  totalDuration: mediaState.currentDuration,
+                  isPlaying: mediaState.isPlaying,
+                  onSeek: (position) {
+                    ref.read(mediaNotifierProvider.notifier).seekTo(position);
+                  },
+                  onPlayPause: () {
+                    ref
+                        .read(mediaNotifierProvider.notifier)
+                        .setPlaying(!mediaState.isPlaying);
+                  },
+                ),
+              ),
+            if (mediaState.currentDuration.inMilliseconds > 0)
+              const SizedBox(height: 16),
             if (lyricsState.isLoading && lyricsState.lyrics == null)
               _buildLoadingState()
             else if (lyricsState.error != null && lyricsState.lyrics == null)
@@ -232,6 +253,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   lyrics: lyricsState.lyrics!,
                   currentPosition: mediaState.currentPosition,
                   isPlaying: mediaState.isPlaying,
+                  onSeek: (position) {
+                    ref.read(mediaNotifierProvider.notifier).seekTo(position);
+                  },
                 ),
               )
             else

@@ -205,6 +205,16 @@ class MediaNotifier extends StateNotifier<MediaState> {
     );
   }
 
+  /// Seek to a specific position in the current song
+  Future<bool> seekTo(Duration position) async {
+    return await _service.seekTo(position);
+  }
+
+  /// Play or pause the current song
+  Future<bool> setPlaying(bool playing) async {
+    return await _service.setPlaying(playing);
+  }
+
   @override
   void dispose() {
     _songSubscription?.cancel();

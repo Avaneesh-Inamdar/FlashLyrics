@@ -482,6 +482,59 @@ class MediaDetectionService {
       return null;
     }
   }
+
+  /// Seek to a specific position in the current song
+  Future<bool> seekTo(Duration position) async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('seekTo', {
+        'position': position.inMilliseconds,
+      });
+      if (result == true) {
+        _currentPosition = position;
+        if (!_positionController.isClosed) {
+          _positionController.add(
+            PlaybackPosition(
+              position: _currentPosition,
+              duration: _currentDuration,
+              isPlaying: _isPlaying,
+            ),
+          );
+        }
+      }
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error seeking: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Play or pause the current song
+  Future<bool> setPlaying(bool playing) async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('setPlaying', {
+        'playing': playing,
+      });
+      if (result == true) {
+        _isPlaying = playing;
+        if (!_playbackController.isClosed) {
+          _playbackController.add(playing);
+        }
+        if (!_positionController.isClosed) {
+          _positionController.add(
+            PlaybackPosition(
+              position: _currentPosition,
+              duration: _currentDuration,
+              isPlaying: playing,
+            ),
+          );
+        }
+      }
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error setting playback state: ${e.message}');
+      return false;
+    }
+  }
 }
 
 /// Represents the current playback position with metadata
