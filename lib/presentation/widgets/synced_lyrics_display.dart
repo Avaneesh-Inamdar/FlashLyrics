@@ -12,6 +12,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
   final bool isPlaying;
   final ValueChanged<Duration>? onSeek;
   final double fontSize;
+  final int syncOffsetMs; // User-configurable sync offset in milliseconds
 
   const SyncedLyricsDisplay({
     super.key,
@@ -20,6 +21,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
     this.isPlaying = false,
     this.onSeek,
     this.fontSize = 22.0,
+    this.syncOffsetMs = 0,
   });
 
   @override
@@ -32,13 +34,17 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   final ScrollController _scrollController = ScrollController();
   double _viewportPadding = 160.0;
   bool _didInitialScroll = false;
-  static const Duration _syncLeadTime = Duration(milliseconds: 1200);
+  static const Duration _baseSyncLeadTime = Duration(milliseconds: 800);
 
   // Track playback state for resuming scroll after theme change
   bool _wasPlaying = false;
 
   // Dynamic item height based on font size
   double get _itemHeight => widget.fontSize * 4.0;
+
+  // Get effective sync lead time combining base time and user offset
+  Duration get _syncLeadTime =>
+      _baseSyncLeadTime + Duration(milliseconds: widget.syncOffsetMs);
 
   @override
   void initState() {
@@ -376,18 +382,22 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 class CompactSyncedLyrics extends StatelessWidget {
   final String lrcContent;
   final Duration currentPosition;
+  final int syncOffsetMs;
 
-  static const Duration _syncLeadTime = Duration(milliseconds: 1200);
+  static const Duration _baseSyncLeadTime = Duration(milliseconds: 800);
 
   const CompactSyncedLyrics({
     super.key,
     required this.lrcContent,
     required this.currentPosition,
+    this.syncOffsetMs = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final syncLeadTime =
+        _baseSyncLeadTime + Duration(milliseconds: syncOffsetMs);
 
     return FutureBuilder<ParsedLrc>(
       future: LrcParser.parse(lrcContent),
@@ -395,7 +405,7 @@ class CompactSyncedLyrics extends StatelessWidget {
         if (!snapshot.hasData) return const SizedBox.shrink();
 
         final lrc = snapshot.data!;
-        final adjustedPosition = currentPosition + _syncLeadTime;
+        final adjustedPosition = currentPosition + syncLeadTime;
         final currentLine = lrc.getLineAtTime(adjustedPosition);
         final currentIndex = lrc.getLineIndexAtTime(adjustedPosition);
         final nextLine = currentIndex + 1 < lrc.lines.length

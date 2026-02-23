@@ -15,6 +15,7 @@ class AppSettings {
   final ThemeModeOption themeMode;
   final List<String> providerPriority;
   final String accentColor;
+  final int lyricsSyncOffset; // Offset in milliseconds for lyrics sync
 
   const AppSettings({
     this.fontSize = 18.0,
@@ -23,6 +24,7 @@ class AppSettings {
     this.keepScreenOn = false,
     this.themeMode = ThemeModeOption.auto,
     this.accentColor = 'emerald',
+    this.lyricsSyncOffset = 0,
     this.providerPriority = const [
       'lrclib',
       'textyl',
@@ -72,6 +74,7 @@ class AppSettings {
     ThemeModeOption? themeMode,
     List<String>? providerPriority,
     String? accentColor,
+    int? lyricsSyncOffset,
   }) {
     return AppSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -80,6 +83,7 @@ class AppSettings {
       keepScreenOn: keepScreenOn ?? this.keepScreenOn,
       themeMode: themeMode ?? this.themeMode,
       accentColor: accentColor ?? this.accentColor,
+      lyricsSyncOffset: lyricsSyncOffset ?? this.lyricsSyncOffset,
       providerPriority: providerPriority ?? this.providerPriority,
     );
   }
@@ -91,6 +95,7 @@ class AppSettings {
     'keepScreenOn': keepScreenOn,
     'themeMode': themeMode.name,
     'accentColor': accentColor,
+    'lyricsSyncOffset': lyricsSyncOffset,
     'providerPriority': providerPriority,
   };
 
@@ -117,6 +122,7 @@ class AppSettings {
       keepScreenOn: json['keepScreenOn'] as bool? ?? false,
       themeMode: parseThemeMode(json['themeMode']),
       accentColor: json['accentColor'] as String? ?? 'emerald',
+      lyricsSyncOffset: json['lyricsSyncOffset'] as int? ?? 0,
       providerPriority:
           (json['providerPriority'] as List<dynamic>?)
               ?.map((e) => e as String)
@@ -202,6 +208,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setAccentColor(String key) {
     state = state.copyWith(accentColor: key);
+    _saveSettings();
+  }
+
+  void setLyricsSyncOffset(int offset) {
+    state = state.copyWith(lyricsSyncOffset: offset);
     _saveSettings();
   }
 
