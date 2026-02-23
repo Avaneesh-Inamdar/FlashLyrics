@@ -12,21 +12,6 @@ Grab the latest APK from [Releases](https://github.com/Avaneesh-Inamdar/FlashLyr
 
 ## Features
 
-### 🎵 Synced Lyrics with Tap-to-Seek
-
-Real-time synced lyrics that scroll automatically with the music. Tap on any lyric line to jump to that part of the song - just like your favorite streaming apps!
-
-### 🎛️ Song Controls
-
-Control playback directly from the app with the built-in seek bar. Play, pause, and seek to any position in the song without switching apps.
-
-### ⏱️ Lyrics Sync Offset
-
-Adjust the lyrics timing if they appear too early or late. Perfect for songs with unusual timing or when the sync is slightly off.
-
-### 🔄 Check for Updates
-
-Stay up to date with the built-in update checker. Get notified when a new version is available on GitHub.
 
 ### 🌓 Light & Dark Mode
 
@@ -59,6 +44,18 @@ Personalize the app with your choice of accent colors to match your style.
 <p align="center">
   <img src="Images/AccentColor.jpeg" alt="Accent Color Customization" width="250" />
 </p>
+
+### 🎵 Synced Lyrics with Tap-to-Seek
+
+Real-time synced lyrics that scroll automatically with the music. Tap on any lyric line to jump to that part of the song - just like your favorite streaming apps!
+
+### 🎛️ Song Controls
+
+Control playback directly from the app with the built-in seek bar. Play, pause, and seek to any position in the song without switching apps.
+
+### ⏱️ Lyrics Sync Offset
+
+Adjust the lyrics timing if they appear too early or late. Perfect for songs with unusual timing or when the sync is slightly off.
 
 ### More
 
