@@ -8,7 +8,20 @@ Android app that detects what song you're playing and shows the lyrics. Works wi
 
 ## Download
 
+**Latest Version: v1.2.0**
+
 Grab the latest APK from [Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases).
+
+⚠️ **Important**: This release uses a new signing key. If you have v1.0 installed, you'll need to uninstall it first before installing v1.2.0.
+
+## What's New in v1.2.0
+
+- 🖼️ **Album Cover in Shared Images**: Shared lyrics now include the song's album artwork
+- 📏 **Dynamic Text Sizing**: Lyrics text automatically adjusts based on the number of lines selected
+- ⚡ **Performance Improvements**: Fixed memory leaks and optimized image generation
+- 🐛 **Bug Fixes**: Improved stability and resource management
+
+[View Full Changelog](RELEASE_NOTES_v1.2.md)
 
 ## Features
 

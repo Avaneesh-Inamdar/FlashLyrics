@@ -1374,7 +1374,7 @@ class SettingsScreen extends ConsumerWidget {
                       children: [
                         IconButton(
                           onPressed: () {
-                            setState(() => selectedOffset -= 500);
+                            setState(() => selectedOffset -= 100);
                           },
                           icon: Icon(
                             Icons.remove_circle_outline,
@@ -1392,7 +1392,7 @@ class SettingsScreen extends ConsumerWidget {
                               value: selectedOffset.toDouble(),
                               min: -3000,
                               max: 3000,
-                              divisions: 12,
+                              divisions: 60,
                               onChanged: (value) {
                                 setState(() => selectedOffset = value.round());
                               },
@@ -1401,7 +1401,7 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                         IconButton(
                           onPressed: () {
-                            setState(() => selectedOffset += 500);
+                            setState(() => selectedOffset += 100);
                           },
                           icon: Icon(
                             Icons.add_circle_outline,

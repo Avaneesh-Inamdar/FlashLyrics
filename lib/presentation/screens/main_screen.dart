@@ -43,9 +43,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         ? AppTheme.surfaceLight
         : AppTheme.lightSurfaceLight;
     final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
+    
+    // Get bottom padding to account for system navigation bar (3-button nav)
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final bottomMargin = (bottomPadding > 0 ? bottomPadding + 8 : 24.0);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      margin: EdgeInsets.fromLTRB(20, 0, 20, bottomMargin),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(

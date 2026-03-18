@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/lrc_parser.dart';
+import 'quick_offset_adjuster.dart';
 
 /// Widget to display synchronized lyrics with Apple Music-style smooth scrolling
 class SyncedLyricsDisplay extends StatefulWidget {
@@ -13,6 +14,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
   final ValueChanged<Duration>? onSeek;
   final double fontSize;
   final int syncOffsetMs; // User-configurable sync offset in milliseconds
+  final ValueChanged<int>? onOffsetChanged; // Callback for quick offset adjustment
 
   const SyncedLyricsDisplay({
     super.key,
@@ -22,6 +24,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
     this.onSeek,
     this.fontSize = 22.0,
     this.syncOffsetMs = 0,
+    this.onOffsetChanged,
   });
 
   @override
@@ -38,6 +41,9 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
   // Track playback state for resuming scroll after theme change
   bool _wasPlaying = false;
+  
+  // Quick offset adjuster state
+  bool _showQuickAdjuster = false;
 
   // Dynamic item height based on font size
   double get _itemHeight => widget.fontSize * 4.0;
@@ -151,6 +157,13 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     return position + _syncLeadTime;
   }
 
+  Duration? _getNextLyricTime() {
+    if (_parsedLrc == null || _currentLineIndex < 0) return null;
+    final nextIndex = _currentLineIndex + 1;
+    if (nextIndex >= _parsedLrc!.lines.length) return null;
+    return _parsedLrc!.lines[nextIndex].timestamp;
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -245,6 +258,51 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
                 ),
               ),
             ),
+            // Quick offset adjuster overlay
+            if (_showQuickAdjuster && widget.onOffsetChanged != null)
+              QuickOffsetAdjuster(
+                currentOffset: widget.syncOffsetMs,
+                currentPosition: widget.currentPosition,
+                nextLyricTime: _getNextLyricTime(),
+                onOffsetChanged: (newOffset) {
+                  widget.onOffsetChanged?.call(newOffset);
+                  setState(() => _showQuickAdjuster = false);
+                },
+                onClose: () => setState(() => _showQuickAdjuster = false),
+              ),
+            // Quick adjust button (collapsed state)
+            if (!_showQuickAdjuster && widget.onOffsetChanged != null)
+              Positioned(
+                top: 16,
+                right: 16,
+                child: GestureDetector(
+                  onTap: () => setState(() => _showQuickAdjuster = true),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppTheme.surfaceColor : AppTheme.lightSurface)
+                              .withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.tune_rounded,
+                          color: AppTheme.primaryLight,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ).animate().fadeIn(delay: 300.ms, duration: 200.ms),
           ],
         );
       },

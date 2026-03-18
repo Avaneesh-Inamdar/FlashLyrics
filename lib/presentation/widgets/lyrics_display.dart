@@ -38,9 +38,14 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   bool _showSizeSlider = false;
   int? _selectedStart;
   int? _selectedEnd;
+  final ScrollController _plainLyricsScrollController = ScrollController();
+  int? _currentLineIndexForScroll; // Track current line for scrolling after view switch
 
-  // Track theme to force rebuild on theme change
-  Brightness? _lastBrightness;
+  @override
+  void dispose() {
+    _plainLyricsScrollController.dispose();
+    super.dispose();
+  }
 
   bool get _hasSelection => _selectedStart != null && _selectedEnd != null;
 
@@ -115,25 +120,12 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     if (oldWidget.lyrics.id != widget.lyrics.id ||
         oldWidget.lyrics.plainLyrics != widget.lyrics.plainLyrics) {
       _clearSelection();
+      _currentLineIndexForScroll = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch for theme changes - this ensures rebuild on theme change
-    final themeBrightness = Theme.of(context).brightness;
-
-    // Force complete rebuild when theme changes
-    final themeChanged =
-        _lastBrightness != null && _lastBrightness != themeBrightness;
-    if (themeChanged || _lastBrightness == null) {
-      _lastBrightness = themeBrightness;
-      // Force rebuild by calling setState in post frame callback
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() {});
-      });
-    }
-
     final settings = ref.watch(settingsProvider);
     final showSyncedLyrics = settings.showSyncedLyrics;
 
@@ -146,20 +138,27 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     // Setting can be temporarily toggled off for line selection (share as image)
     final useSyncedLyrics = hasSyncedLyrics && showSyncedLyrics;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
       children: [
-        // Actions row
-        if (widget.showActions)
-          _buildActionsRow(context, hasSyncedLyrics, showSyncedLyrics),
-        // Font size slider (only for synced lyrics)
-        if (hasSyncedLyrics && _showSizeSlider) _buildFontSizeSlider(),
-        const SizedBox(height: 16),
-        // Lyrics content - show synced if available, otherwise plain
-        if (useSyncedLyrics) _buildSyncedLyrics() else _buildPlainLyrics(),
-        const SizedBox(height: 16),
-        // Source info
-        _buildSourceInfo(context),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Actions row
+            if (widget.showActions)
+              _buildActionsRow(context, hasSyncedLyrics, showSyncedLyrics),
+            // Font size slider (only for synced lyrics)
+            if (hasSyncedLyrics && _showSizeSlider) _buildFontSizeSlider(),
+            const SizedBox(height: 16),
+            // Lyrics content - show synced if available, otherwise plain
+            if (useSyncedLyrics) _buildSyncedLyrics() else _buildPlainLyrics(),
+            const SizedBox(height: 16),
+            // Source info
+            _buildSourceInfo(context),
+          ],
+        ),
+        // Floating share button when lines are selected
+        if (_hasSelection && !showSyncedLyrics)
+          _buildFloatingShareButton(context),
       ],
     );
   }
@@ -270,7 +269,20 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (hasSyncedLyrics)
+                  // Show cancel button when in share mode (plain lyrics view with synced available)
+                  if (hasSyncedLyrics && !showSyncedLyrics)
+                    _buildActionButton(
+                      icon: Icons.close_rounded,
+                      label: 'Cancel',
+                      onTap: () {
+                        _clearSelection();
+                        setState(() {
+                          _currentLineIndexForScroll = null;
+                        });
+                        ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
+                      },
+                    ),
+                  if (hasSyncedLyrics && showSyncedLyrics)
                     _buildActionButton(
                       icon: _showSizeSlider
                           ? Icons.text_fields
@@ -482,6 +494,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         : AppTheme.lightSurfaceLight;
 
     return Container(
+      height: 500, // Fixed height to make it scrollable
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -489,8 +502,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         border: Border.all(color: borderColor, width: 1),
       ),
       child: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
+        controller: _plainLyricsScrollController,
         itemCount: lines.length,
         itemBuilder: (context, index) {
           final line = lines[index];
@@ -506,6 +518,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
 
           return GestureDetector(
             onTap: () => _updateSelection(index),
+            onLongPress: () => _shareSingleLine(context, line),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.symmetric(vertical: 6),
@@ -539,6 +552,46 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0);
   }
 
+  Widget _buildFloatingShareButton(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Positioned(
+      bottom: 80,
+      right: 20,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(30),
+        color: AppTheme.primaryColor,
+        child: InkWell(
+          onTap: () => _shareToClipboard(context),
+          borderRadius: BorderRadius.circular(30),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.share_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Share (${_selectedCount.toString()})',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ).animate().fadeIn(duration: 300.ms).scale(begin: const Offset(0.8, 0.8)),
+    );
+  }
+
   Widget _buildSyncedLyrics() {
     // Dynamic height based on font size (larger fonts need more space)
     final dynamicHeight = 400 + (_syncedFontSize - 14) * 8;
@@ -568,6 +621,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         onSeek: widget.onSeek,
         fontSize: _syncedFontSize,
         syncOffsetMs: settings.lyricsSyncOffset,
+        onOffsetChanged: (newOffset) {
+          ref.read(settingsProvider.notifier).setLyricsSyncOffset(newOffset);
+        },
       ),
     ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.98, 0.98));
   }
@@ -738,11 +794,17 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       // Restore synced lyrics view and clear selection after sharing
       if (!mounted) return;
       _clearSelection();
+      setState(() {
+        _currentLineIndexForScroll = null;
+      });
       ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
     } catch (e) {
       // Restore state even on error
       if (mounted) {
         _clearSelection();
+        setState(() {
+          _currentLineIndexForScroll = null;
+        });
         ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
       }
       if (!context.mounted) return;
@@ -771,24 +833,174 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     }
   }
 
-  void _handleShareTap(BuildContext context, bool showSyncedLyrics) {
+  Future<void> _handleShareTap(BuildContext context, bool showSyncedLyrics) async {
     if (_hasSelection) {
-      _shareToClipboard(context);
+      await _shareToClipboard(context);
       return;
+    }
+
+    // Calculate current line index from synced lyrics if available
+    if (showSyncedLyrics && widget.lyrics.lrcLyrics != null && widget.currentPosition != null) {
+      await _calculateCurrentLineIndex();
     }
 
     if (showSyncedLyrics) {
       ref.read(settingsProvider.notifier).setShowSyncedLyrics(false);
+      
+      // Scroll to current line after view is built
+      _scrollToCurrentLine();
+      
+      // Auto-restore synced lyrics after 30 seconds if user doesn't complete action
+      Future.delayed(const Duration(seconds: 30), () {
+        if (mounted && !_hasSelection) {
+          ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
+          setState(() {
+            _currentLineIndexForScroll = null;
+          });
+        }
+      });
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Tap lyric lines to select and share'),
+        content: const Text('Tap to select lines, long-press to share single line'),
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppTheme.surfaceLight,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
       ),
     );
+  }
+  
+  Future<void> _calculateCurrentLineIndex() async {
+    if (widget.lyrics.lrcLyrics == null || widget.currentPosition == null) return;
+    
+    try {
+      // Parse LRC to find current line
+      final parsedLrc = await LrcParser.parse(widget.lyrics.lrcLyrics!);
+      if (!mounted) return;
+      
+      final currentIndex = parsedLrc.getLineIndexAtTime(widget.currentPosition!);
+      if (currentIndex >= 0) {
+        setState(() {
+          _currentLineIndexForScroll = currentIndex;
+        });
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
+  }
+  
+  void _scrollToCurrentLine() {
+    if (_currentLineIndexForScroll == null) return;
+    
+    final lines = _plainLyricsLines();
+    if (_currentLineIndexForScroll! >= lines.length) return;
+    
+    // Wait for the ListView to be fully rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_plainLyricsScrollController.hasClients) return;
+      
+      // Give extra time for the view to settle
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted || !_plainLyricsScrollController.hasClients) return;
+        
+        // Calculate approximate scroll position
+        // Each line is approximately 50px (text + padding + margin)
+        final approximateLineHeight = 50.0;
+        final targetOffset = (_currentLineIndexForScroll! * approximateLineHeight) - 100; // Offset to show it near top
+        
+        // Scroll to position with animation
+        _plainLyricsScrollController.animateTo(
+          targetOffset.clamp(0.0, _plainLyricsScrollController.position.maxScrollExtent),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    });
+  }
+
+  Future<void> _shareSingleLine(BuildContext context, String line) async {
+    // Get current song from lyrics provider
+    final lyricsState = ref.read(lyricsNotifierProvider);
+    final currentSong = lyricsState.currentSong;
+
+    if (currentSong == null || line.trim().isEmpty) return;
+
+    // Show loading indicator
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Creating lyrics image...'),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 30),
+      ),
+    );
+
+    try {
+      // Generate lyrics image
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final imageFile = await LyricsImageGenerator.generateLyricsImage(
+        song: currentSong,
+        lines: [line],
+        isDark: isDark,
+      );
+
+      if (imageFile != null && context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+
+        // Share the image
+        await Share.shareXFiles(
+          [XFile(imageFile.path)],
+          text:
+              '${currentSong.title} - ${currentSong.artist}\n\nShared from FlashLyrics',
+        );
+      } else if (context.mounted) {
+        // Fallback to text if image generation failed
+        ScaffoldMessenger.of(context).clearSnackBars();
+        final formattedLyrics =
+            '${currentSong.title} - ${currentSong.artist}\n\n$line\n\n— Shared via FlashLyrics';
+        Share.share(formattedLyrics);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.redAccent,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Error sharing: $e')),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.surfaceLight,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 }
