@@ -137,14 +137,15 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
       );
 
       if (animate && _scrollController.hasClients) {
-        // Optimized animation - faster and more responsive (200ms instead of 350ms)
-        if (!_scrollController.position.isScrollingNotifier.value) {
-          _scrollController.animateTo(
-            clampedOffset,
-            duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOutCubic,
-          );
-        }
+        // High-refresh friendly animation: always animate (no isScrolling guard)
+        // At 90/120Hz the isScrollingNotifier stays true longer and would
+        // incorrectly block subsequent scrolls, making sync appear frozen.
+        // Use a slightly shorter duration and easeOutCubic for smoothness at any refresh.
+        _scrollController.animateTo(
+          clampedOffset,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+        );
       } else if (_scrollController.hasClients) {
         _scrollController.jumpTo(clampedOffset);
       }
@@ -214,13 +215,18 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
         return Stack(
           children: [
             // Main lyrics list - clean minimal design without shader mask
-            ListView.builder(
-              controller: _scrollController,
-              padding: EdgeInsets.symmetric(vertical: _viewportPadding),
-              physics: const BouncingScrollPhysics(),
-              itemCount: _parsedLrc!.lines.length,
-              itemExtent: _itemHeight,
-              itemBuilder: (context, index) => _buildLyricLine(index, isDark),
+            // RepaintBoundary prevents full-tree repaints at 90/120Hz improving frame budget
+            RepaintBoundary(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: EdgeInsets.symmetric(vertical: _viewportPadding),
+                physics: const BouncingScrollPhysics(),
+                addRepaintBoundaries: true,
+                addAutomaticKeepAlives: false,
+                itemCount: _parsedLrc!.lines.length,
+                itemExtent: _itemHeight,
+                itemBuilder: (context, index) => RepaintBoundary(child: _buildLyricLine(index, isDark)),
+              ),
             ),
             // Simple top fade effect
             Positioned(

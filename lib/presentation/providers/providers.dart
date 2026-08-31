@@ -129,6 +129,22 @@ final searchCachedLyricsUseCaseProvider = Provider<SearchCachedLyricsUseCase>((
   return SearchCachedLyricsUseCase(repository);
 });
 
+/// Delete cached lyrics use case provider
+final deleteCachedLyricsUseCaseProvider = Provider<DeleteCachedLyricsUseCase>((
+  ref,
+) {
+  final repository = ref.watch(lyricsRepositoryProvider);
+  return DeleteCachedLyricsUseCase(repository);
+});
+
+/// Clear all cached lyrics use case provider
+final clearAllCachedLyricsUseCaseProvider = Provider<ClearAllCachedLyricsUseCase>((
+  ref,
+) {
+  final repository = ref.watch(lyricsRepositoryProvider);
+  return ClearAllCachedLyricsUseCase(repository);
+});
+
 /// Tab index state notifier for controlling bottom navigation
 class TabIndexNotifier extends StateNotifier<int> {
   TabIndexNotifier() : super(0);

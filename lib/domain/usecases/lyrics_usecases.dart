@@ -56,3 +56,27 @@ class SearchCachedLyricsUseCase {
   Future<List<Lyrics>> call(String query) =>
       _repository.searchCachedLyrics(query);
 }
+
+/// Use case for deleting cached lyrics
+class DeleteCachedLyricsUseCase {
+  final LyricsRepository _repository;
+
+  DeleteCachedLyricsUseCase(this._repository);
+
+  Future<void> call(String songId) => _repository.deleteCachedLyrics(songId);
+}
+
+/// Use case for clearing all cached lyrics
+class ClearAllCachedLyricsUseCase {
+  final LyricsRepository _repository;
+
+  ClearAllCachedLyricsUseCase(this._repository);
+
+  // Expose via local datasource directly through repository if needed
+  Future<void> call() async {
+    final all = await _repository.getAllCachedLyrics();
+    for (final l in all) {
+      await _repository.deleteCachedLyrics(l.songId);
+    }
+  }
+}

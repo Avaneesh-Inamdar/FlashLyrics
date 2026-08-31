@@ -31,6 +31,53 @@ class MainActivity : FlutterActivity() {
     }
     
     private var eventSink: EventChannel.EventSink? = null
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        // High refresh rate fix: prefer the highest available refresh rate mode.
+        // On devices with 90/120Hz panels Flutter otherwise may be throttled to 60Hz
+        // if the window doesn't explicitly request a high-refresh mode.
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                val display = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    display
+                } else {
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay
+                }
+                val modes = display?.supportedModes
+                if (modes != null && modes.isNotEmpty()) {
+                    val activeMode = display.mode
+                    var bestMode = activeMode
+                    for (m in modes) {
+                        // Prefer same resolution as active mode but higher refresh
+                        if (m.physicalWidth == activeMode.physicalWidth &&
+                            m.physicalHeight == activeMode.physicalHeight) {
+                            if (m.refreshRate > bestMode.refreshRate) {
+                                bestMode = m
+                            }
+                        }
+                    }
+                    // Also consider overall highest refresh if no resolution match
+                    if (bestMode.refreshRate == activeMode.refreshRate) {
+                        for (m in modes) {
+                            if (m.refreshRate > bestMode.refreshRate) bestMode = m
+                        }
+                    }
+                    if (bestMode.modeId != activeMode.modeId) {
+                        val attrs = window.attributes
+                        attrs.preferredDisplayModeId = bestMode.modeId
+                        window.attributes = attrs
+                        Log.d(TAG, "High-refresh: selected mode ${bestMode.modeId} @ ${bestMode.refreshRate}Hz (was ${activeMode.modeId} @ ${activeMode.refreshRate}Hz)")
+                    } else {
+                        Log.d(TAG, "High-refresh: keeping mode ${activeMode.modeId} @ ${activeMode.refreshRate}Hz, best ${bestMode.refreshRate}Hz")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set preferred display mode", e)
+        }
+    }
     
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

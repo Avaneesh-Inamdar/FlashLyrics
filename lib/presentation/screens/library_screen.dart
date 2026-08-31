@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../providers/lyrics_provider.dart';
+import '../providers/providers.dart';
 import '../widgets/lyrics_display.dart';
 
 /// Library screen showing saved lyrics with modern design
@@ -27,6 +28,18 @@ class LibraryScreen extends ConsumerWidget {
             style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
           ),
         ),
+        actions: [
+          cachedLyricsAsync.maybeWhen(
+            data: (list) => list.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.delete_sweep_rounded),
+                    tooltip: 'Clear all cache',
+                    onPressed: () => _confirmClearAll(context, ref),
+                  )
+                : const SizedBox.shrink(),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -208,15 +221,17 @@ class LibraryScreen extends ConsumerWidget {
     final sortedList = List<dynamic>.from(lyricsList)
       ..sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-      physics: const BouncingScrollPhysics(),
-      itemCount: sortedList.length,
-      itemBuilder: (context, index) {
-        final lyrics = sortedList[index];
-        return _buildLyricsCard(context, lyrics, index, isDark);
-      },
-    );
+    return Consumer(builder: (context, ref, _) {
+      return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+        physics: const BouncingScrollPhysics(),
+        itemCount: sortedList.length,
+        itemBuilder: (context, index) {
+          final lyrics = sortedList[index];
+          return _buildLyricsCard(context, lyrics, index, isDark, ref);
+        },
+      );
+    });
   }
 
   Widget _buildLyricsCard(
@@ -224,6 +239,7 @@ class LibraryScreen extends ConsumerWidget {
     dynamic lyrics,
     int index,
     bool isDark,
+    WidgetRef ref,
   ) {
     // Use trackName and artistName from model if available, otherwise fallback to parsing
     final rawTitle = lyrics.trackName as String?;
@@ -393,11 +409,15 @@ class LibraryScreen extends ConsumerWidget {
                               ],
                             ),
                           ),
-                          // Arrow
+                          IconButton(
+                            icon: Icon(Icons.delete_outline_rounded, color: textHint, size: 20),
+                            tooltip: 'Delete cached lyrics',
+                            onPressed: () => _confirmDeleteSingle(context, ref, lyrics),
+                          ),
                           Icon(
                             Icons.chevron_right_rounded,
                             color: textHint,
-                            size: 24,
+                            size: 22,
                           ),
                         ],
                       ),
@@ -506,6 +526,50 @@ class LibraryScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 24),
                     LyricsDisplay(lyrics: lyrics),
+                    const SizedBox(height: 16),
+                    // Delete from cache button inside details
+                    Consumer(builder: (cntx, ref2, _) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          label: const Text('Delete from cache'),
+                          style: OutlinedButton.styleFrom(foregroundColor: AppTheme.errorColor),
+                          onPressed: () async {
+                            Navigator.pop(cntx);
+                            // Need parent ref for deletion; use ref2 or outer ref if available
+                            // We'll use ref2 which has access to providers
+                            final songId = (lyrics as dynamic).songId as String?;
+                            if (songId == null) return;
+                            final confirmed = await showDialog<bool>(
+                              context: cntx,
+                              builder: (dctx) => AlertDialog(
+                                title: const Text('Delete cached lyrics?'),
+                                content: const Text('Remove this song from offline storage?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('Cancel')),
+                                  FilledButton(
+                                    style: FilledButton.styleFrom(backgroundColor: AppTheme.errorColor),
+                                    onPressed: () => Navigator.pop(dctx, true),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed != true) return;
+                            try {
+                              await ref2.read(lyricsRepositoryProvider).deleteCachedLyrics(songId);
+                              ref2.invalidate(cachedLyricsProvider);
+                              if (cntx.mounted) {
+                                ScaffoldMessenger.of(cntx).showSnackBar(const SnackBar(content: Text('Deleted from cache')));
+                              }
+                            } catch (e) {
+                              if (cntx.mounted) ScaffoldMessenger.of(cntx).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                            }
+                          },
+                        ),
+                      );
+                    }),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -515,5 +579,70 @@ class LibraryScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteSingle(BuildContext context, WidgetRef ref, dynamic lyrics) async {
+    final songId = lyrics.songId as String?;
+    if (songId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete cached lyrics?'),
+        content: const Text('This will remove the lyrics for this song from offline storage. You can fetch it again later.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.errorColor),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(lyricsRepositoryProvider).deleteCachedLyrics(songId);
+      ref.invalidate(cachedLyricsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Deleted from cache')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+      }
+    }
+  }
+
+  Future<void> _confirmClearAll(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear all cached lyrics?'),
+        content: const Text('This will delete all offline lyrics. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.errorColor),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final local = ref.read(lyricsLocalDataSourceProvider);
+      await local.clearAllCache();
+      ref.invalidate(cachedLyricsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All cached lyrics cleared')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to clear: $e')));
+      }
+    }
   }
 }

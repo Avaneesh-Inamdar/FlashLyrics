@@ -39,7 +39,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   int? _selectedStart;
   int? _selectedEnd;
   final ScrollController _plainLyricsScrollController = ScrollController();
-  int? _currentLineIndexForScroll; // Track current line for scrolling after view switch
+  int? _currentLineIndexForScroll; // Target plain line to scroll to when entering share mode
+  // Keys for each plain lyric line to enable precise scroll to current playback position
+  List<GlobalKey> _lineKeys = [];
 
   @override
   void dispose() {
@@ -56,6 +58,12 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
 
   List<String> _plainLyricsLines() {
     return widget.lyrics.plainLyrics.split('\n');
+  }
+
+  void _ensureLineKeys(int count) {
+    if (_lineKeys.length != count) {
+      _lineKeys = List.generate(count, (_) => GlobalKey());
+    }
   }
 
   void _clearSelection() {
@@ -121,6 +129,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         oldWidget.lyrics.plainLyrics != widget.lyrics.plainLyrics) {
       _clearSelection();
       _currentLineIndexForScroll = null;
+      _lineKeys = [];
     }
   }
 
@@ -493,6 +502,8 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         ? AppTheme.surfaceLight
         : AppTheme.lightSurfaceLight;
 
+    _ensureLineKeys(lines.length);
+
     return Container(
       height: 500, // Fixed height to make it scrollable
       padding: const EdgeInsets.all(24),
@@ -511,45 +522,74 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
               _hasSelection &&
               index >= _selectedStart! &&
               index <= _selectedEnd!;
+          final isTargetLine = _currentLineIndexForScroll != null && index == _currentLineIndexForScroll;
 
           if (isEmpty) {
-            return const SizedBox(height: 14);
+            return SizedBox(key: _lineKeys[index], height: 14);
           }
 
-          return GestureDetector(
-            onTap: () => _updateSelection(index),
-            onLongPress: () => _shareSingleLine(context, line),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppTheme.primaryColor.withValues(alpha: 0.15)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                border: isSelected
-                    ? Border.all(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.35),
-                      )
-                    : null,
-              ),
-              child: Text(
-                line,
-                style: TextStyle(
-                  fontSize: 18,
-                  height: 1.7,
-                  fontWeight: FontWeight.w500,
-                  color: textColor,
-                  letterSpacing: 0.3,
+          return Container(
+            key: _lineKeys[index],
+            child: GestureDetector(
+              onTap: () => _updateSelection(index),
+              onLongPress: () => _shareSingleLine(context, line),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                      : isTargetLine
+                          ? AppTheme.successColor.withValues(alpha: 0.10)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: isSelected
+                      ? Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.35))
+                      : isTargetLine
+                          ? Border.all(color: AppTheme.successColor.withValues(alpha: 0.25))
+                          : null,
                 ),
-                textAlign: TextAlign.center,
+                child: Column(
+                  children: [
+                    if (isTargetLine && !_hasSelection)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(width: 6, height: 6, decoration: BoxDecoration(color: AppTheme.successColor, shape: BoxShape.circle)),
+                            const SizedBox(width: 6),
+                            Text('Now playing • ${_formatDuration(widget.currentPosition)}', style: TextStyle(fontSize: 11, color: AppTheme.successColor, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    Text(
+                      line,
+                      style: TextStyle(
+                        fontSize: 18,
+                        height: 1.7,
+                        fontWeight: isTargetLine ? FontWeight.w700 : FontWeight.w500,
+                        color: textColor,
+                        letterSpacing: 0.3,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         },
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0);
+  }
+
+  String _formatDuration(Duration? d) {
+    if (d == null) return '0:00';
+    final m = d.inMinutes.remainder(60).toString();
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 
   Widget _buildFloatingShareButton(BuildContext context) {
@@ -839,7 +879,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       return;
     }
 
-    // Calculate current line index from synced lyrics if available
+    // If we're in synced mode and have a playback position, jump to that line in plain view
     if (showSyncedLyrics && widget.lyrics.lrcLyrics != null && widget.currentPosition != null) {
       await _calculateCurrentLineIndex();
     }
@@ -847,7 +887,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     if (showSyncedLyrics) {
       ref.read(settingsProvider.notifier).setShowSyncedLyrics(false);
       
-      // Scroll to current line after view is built
+      // Scroll precisely to the current playback line after view is built
       _scrollToCurrentLine();
       
       // Auto-restore synced lyrics after 30 seconds if user doesn't complete action
@@ -861,9 +901,12 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       });
     }
 
+    final posLabel = _formatDuration(widget.currentPosition);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Tap to select lines, long-press to share single line'),
+        content: Text(_currentLineIndexForScroll != null
+            ? 'Scrolled to $posLabel — tap lines to select, share button to create image'
+            : 'Tap lines to select, long-press to share single line'),
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppTheme.surfaceLight,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -876,14 +919,47 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     if (widget.lyrics.lrcLyrics == null || widget.currentPosition == null) return;
     
     try {
-      // Parse LRC to find current line
       final parsedLrc = await LrcParser.parse(widget.lyrics.lrcLyrics!);
       if (!mounted) return;
       
-      final currentIndex = parsedLrc.getLineIndexAtTime(widget.currentPosition!);
-      if (currentIndex >= 0) {
+      // Replicate synced display's lead time (800ms + user offset) to find the
+      // same line the user currently sees highlighted at `currentPosition`
+      final settings = ref.read(settingsProvider);
+      final lead = const Duration(milliseconds: 800) + Duration(milliseconds: settings.lyricsSyncOffset);
+      final adjusted = widget.currentPosition! + lead;
+      final currentIndex = parsedLrc.getLineIndexAtTime(adjusted);
+      if (currentIndex < 0 || currentIndex >= parsedLrc.lines.length) return;
+
+      final currentText = parsedLrc.lines[currentIndex].text.trim();
+      final plainLines = _plainLyricsLines();
+      int plainIndex = -1;
+
+      if (currentText.isNotEmpty) {
+        // Try exact match first
+        plainIndex = plainLines.indexWhere((l) => l.trim() == currentText);
+        // Fallback: case-insensitive contains
+        if (plainIndex == -1) {
+          final lower = currentText.toLowerCase();
+          plainIndex = plainLines.indexWhere((l) => l.trim().toLowerCase().contains(lower) || lower.contains(l.trim().toLowerCase()));
+        }
+      }
+
+      // Fallback: proportional mapping if text not found (e.g., plain vs lrc mismatch)
+      if (plainIndex == -1) {
+        final ratio = parsedLrc.lines.isEmpty ? 0.0 : currentIndex / parsedLrc.lines.length;
+        plainIndex = (ratio * plainLines.length).round().clamp(0, plainLines.length - 1);
+        // Skip empty lines near target
+        int offset = 0;
+        while (plainIndex + offset < plainLines.length && plainLines[plainIndex + offset].trim().isEmpty) offset++;
+        if (plainIndex + offset < plainLines.length) plainIndex += offset;
+      }
+
+      if (plainIndex >= 0) {
         setState(() {
-          _currentLineIndexForScroll = currentIndex;
+          _currentLineIndexForScroll = plainIndex;
+          // Auto-select the current line so user sees it and can immediately share or extend
+          _selectedStart = plainIndex;
+          _selectedEnd = plainIndex;
         });
       }
     } catch (e) {
@@ -893,29 +969,37 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   
   void _scrollToCurrentLine() {
     if (_currentLineIndexForScroll == null) return;
+    final target = _currentLineIndexForScroll!;
+    _ensureLineKeys(_plainLyricsLines().length);
+    if (target >= _lineKeys.length) return;
     
-    final lines = _plainLyricsLines();
-    if (_currentLineIndexForScroll! >= lines.length) return;
-    
-    // Wait for the ListView to be fully rendered
+    // Wait for plain ListView to be mounted, then use ensureVisible for pixel-perfect scroll
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_plainLyricsScrollController.hasClients) return;
-      
-      // Give extra time for the view to settle
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted || !_plainLyricsScrollController.hasClients) return;
-        
-        // Calculate approximate scroll position
-        // Each line is approximately 50px (text + padding + margin)
-        final approximateLineHeight = 50.0;
-        final targetOffset = (_currentLineIndexForScroll! * approximateLineHeight) - 100; // Offset to show it near top
-        
-        // Scroll to position with animation
-        _plainLyricsScrollController.animateTo(
-          targetOffset.clamp(0.0, _plainLyricsScrollController.position.maxScrollExtent),
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeOutCubic,
-        );
+      if (!mounted) return;
+      // Extra frame to ensure layout is complete
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final key = _lineKeys[target];
+        final ctx = key.currentContext;
+        if (ctx != null) {
+          try {
+            await Scrollable.ensureVisible(
+              ctx,
+              duration: const Duration(milliseconds: 550),
+              curve: Curves.easeOutCubic,
+              alignment: 0.3, // Show target near top third, with context above/below
+            );
+            return;
+          } catch (_) {
+            // Fall through to offset-based scroll
+          }
+        }
+        // Fallback: offset-based scroll if GlobalKey not yet attached
+        if (!_plainLyricsScrollController.hasClients) return;
+        // Estimate 56px per line (padding + text)
+        const est = 56.0;
+        final offset = (target * est - 100).clamp(0.0, _plainLyricsScrollController.position.maxScrollExtent);
+        _plainLyricsScrollController.animateTo(offset, duration: const Duration(milliseconds: 500), curve: Curves.easeOutCubic);
       });
     });
   }

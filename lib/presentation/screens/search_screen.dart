@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/lyrics_model.dart';
 import '../providers/providers.dart';
+import '../providers/settings_provider.dart';
 
 /// Search screen with simplified song name input and visual results
 class SearchScreen extends ConsumerStatefulWidget {
@@ -46,16 +47,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return;
     }
 
-    // Debounce: cancel previous timer and wait 400ms
-    if (query != _lastQuery && query.isNotEmpty) {
-      _lastQuery = query;
+    if (query.length < 2) {
+      // Too short, don't search yet
       _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 400), () {
-        if (mounted && _searchController.text.trim() == query) {
-          _performSearch();
-        }
-      });
+      return;
     }
+
+    // Debounce: cancel previous timer and wait 450ms before searching
+    _lastQuery = query;
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 450), () {
+      if (mounted && _searchController.text.trim() == query) {
+        _performSearch();
+      }
+    });
   }
 
   @override
@@ -600,118 +605,108 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Future<void> _performSearch() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
+    if (query.length < 2) {
+      setState(() => _error = 'Type at least 2 characters');
+      return;
+    }
 
-    final thisSearchId =
-        ++_searchId; // Increment to invalidate any in-flight search
+    final thisSearchId = ++_searchId;
 
     setState(() {
       _isSearching = true;
       _error = null;
-      // DON'T clear _results here — keep showing old results until new ones arrive
     });
 
     try {
       final datasource = ref.read(lyricsRemoteDataSourceProvider);
-      List<LyricsModel> allResults = [];
-
-      // Try to parse "artist - song" or "artist / song" format
-      String? artist;
-      String? title;
-
-      if (query.contains(' - ')) {
-        final parts = query.split(' - ');
-        if (parts.length == 2) {
-          artist = parts[0].trim();
-          title = parts[1].trim();
-        }
-      } else if (query.contains(' / ')) {
-        final parts = query.split(' / ');
-        if (parts.length == 2) {
-          artist = parts[0].trim();
-          title = parts[1].trim();
-        }
+      final settings = ref.read(settingsProvider);
+      // Use the unified, priority-aware search that handles both parsed and free-form queries
+      // Timeout after 14s to avoid hanging indefinitely on slow networks
+      List<LyricsModel> rawResults = [];
+      try {
+        rawResults = await datasource
+            .searchByQuery(query, providerPriority: settings.providerPriority)
+            .timeout(const Duration(seconds: 14), onTimeout: () => <LyricsModel>[]);
+      } catch (e) {
+        if (kDebugMode) debugPrint('searchByQuery outer error: $e');
+        rawResults = [];
       }
 
-      // If we parsed artist and title, search with them directly using parallel fetch
-      if (artist != null &&
-          artist.isNotEmpty &&
-          title != null &&
-          title.isNotEmpty) {
-        try {
-          // Use searchAllProviders for direct artist/title search
-          final artistTitleResults = await datasource.searchAllProviders(
-            artist,
-            title,
-          );
+      // Filter empties and dedupe by source+songId (keep different provider variants)
+      final seen = <String>{};
+      final filtered = <LyricsModel>[];
+      for (final m in rawResults) {
+        if (m.plainLyrics.isEmpty) continue;
+        final key = '${m.source.toLowerCase()}|${m.songId}';
+        if (seen.add(key)) filtered.add(m);
+      }
 
-          // Collect all results that have lyrics
-          for (final entry in artistTitleResults.entries) {
-            final model = entry.value;
-            if (model != null && model.plainLyrics.isNotEmpty) {
-              allResults.add(model);
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) debugPrint('Direct artist/title search failed: $e');
+      // Results already sorted by datasource (synced + priority), but ensure local priority order
+      filtered.sort((a, b) {
+        if (a.isSynced != b.isSynced) return a.isSynced ? -1 : 1;
+        String idFor(LyricsModel m) {
+          final s = m.source.toLowerCase();
+          if (s.contains('lrclib')) return 'lrclib';
+          if (s.contains('textyl')) return 'textyl';
+          if (s.contains('chartlyrics')) return 'chartlyrics';
+          if (s.contains('lyrics.ovh')) return 'lyrics.ovh';
+          if (s.contains('lyrist')) return 'lyrist';
+          if (s.contains('netease')) return 'netease';
+          return s;
         }
-      }
-
-      // If no results from direct search or couldn't parse, try general query search
-      // This uses LRCLIB search which is more forgiving
-      if (allResults.isEmpty) {
-        allResults = await datasource.searchByQuery(query);
-      }
-
-      // Filter and deduplicate results
-      final seenIds = <String>{};
-      final filteredResults = <LyricsModel>[];
-      for (final model in allResults) {
-        if (model.plainLyrics.isNotEmpty && !seenIds.contains(model.songId)) {
-          seenIds.add(model.songId);
-          filteredResults.add(model);
-        }
-      }
-
-      // Sort results: prioritize synced lyrics
-      filteredResults.sort((a, b) {
-        if (a.isSynced && !b.isSynced) return -1;
-        if (!a.isSynced && b.isSynced) return 1;
+        final prio = settings.providerPriority;
+        final ia = prio.indexOf(idFor(a));
+        final ib = prio.indexOf(idFor(b));
+        final pa = ia == -1 ? 999 : ia;
+        final pb = ib == -1 ? 999 : ib;
+        if (pa != pb) return pa.compareTo(pb);
         return 0;
       });
 
-      final results = filteredResults
-          .map(
-            (model) => SearchResult(
-              title: model.trackName ?? 'Unknown Song',
-              artist: model.artistName ?? 'Unknown Artist',
-              album: model.albumName,
-              source: model.source,
-              isSynced: model.isSynced,
-              lyrics: model,
-            ),
-          )
+      final results = filtered
+          .map((m) => SearchResult(
+                title: (m.trackName?.trim().isNotEmpty == true) ? m.trackName!.trim() : _prettyFromSongId(m.songId, isTitle: true),
+                artist: (m.artistName?.trim().isNotEmpty == true) ? m.artistName!.trim() : _prettyFromSongId(m.songId, isTitle: false),
+                album: m.albumName,
+                source: m.source,
+                isSynced: m.isSynced,
+                lyrics: m,
+              ))
           .toList();
 
-      if (mounted && thisSearchId == _searchId) {
-        setState(() {
-          _results = results;
-          _isSearching = false;
-          // Show helper message if no results found
-          if (_results.isEmpty) {
-            _error = 'No lyrics found. Try formatting: "Artist - Song Name"';
-          } else {
-            _error = null;
-          }
-        });
-      }
+      if (!mounted || thisSearchId != _searchId) return;
+      setState(() {
+        _results = results;
+        _isSearching = false;
+        if (_results.isEmpty) {
+          _error = null; // Show no-results state instead of error banner
+        }
+      });
     } catch (e) {
-      if (mounted && thisSearchId == _searchId) {
-        setState(() {
-          _error = 'Search error: ${e.toString()}';
-          _isSearching = false;
-        });
-      }
+      if (!mounted || thisSearchId != _searchId) return;
+      // Network errors are shown as no-results with retry, not scary stacktrace
+      final msg = e.toString();
+      final isNetwork = msg.contains('SocketException') || msg.contains('Timeout') || msg.contains('Failed host lookup');
+      setState(() {
+        _isSearching = false;
+        _error = isNetwork ? 'Network issue — check connection and try again.' : 'Search failed. Please try again.';
+      });
+      if (kDebugMode) debugPrint('Search failed: $e');
     }
+  }
+
+  String _prettyFromSongId(String songId, {required bool isTitle}) {
+    if (songId.isEmpty) return isTitle ? 'Unknown Song' : 'Unknown Artist';
+    final parts = songId.split('_').where((p) => p.isNotEmpty).toList();
+    if (parts.length <= 1) return isTitle ? _prettify(songId) : 'Unknown Artist';
+    final raw = isTitle ? parts.sublist(1).join(' ') : parts.first;
+    return _prettify(raw);
+  }
+
+  String _prettify(String raw) {
+    final normalized = raw.replaceAll(RegExp(r'_+'), ' ').trim();
+    if (normalized.isEmpty) return raw;
+    return normalized.split(' ').map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1).toLowerCase()).join(' ');
   }
 
   void _selectResult(SearchResult result) {

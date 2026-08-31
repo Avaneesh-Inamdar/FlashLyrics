@@ -84,15 +84,45 @@ class LyricsLocalDataSource {
     }).toList();
   }
 
-  /// Clear all cache
-  Future<void> _clearCache() async {
+  /// Clear all cache (public)
+  Future<void> clearAllCache() async {
     await _prefs.remove(_lyricsCacheKey);
   }
 
-  /// Get cache size
+  /// Clear all cache (internal wrapper)
+  Future<void> _clearCache() async {
+    await clearAllCache();
+  }
+
+  /// Delete by songId (alias for deleteCachedLyrics)
+  Future<void> deleteBySongId(String songId) async {
+    await deleteCachedLyrics(songId);
+  }
+
+  /// Get cache entry count
+  int getCacheCount() {
+    final cachedData = _prefs.getString(_lyricsCacheKey);
+    if (cachedData == null) return 0;
+    try {
+      final Map<String, dynamic> cache = jsonDecode(cachedData);
+      return cache.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Get cache size in bytes
   int getCacheSize() {
     final cachedData = _prefs.getString(_lyricsCacheKey);
     if (cachedData == null) return 0;
     return cachedData.length;
+  }
+
+  /// Get cache size formatted
+  String getCacheSizeFormatted() {
+    final bytes = getCacheSize();
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 }

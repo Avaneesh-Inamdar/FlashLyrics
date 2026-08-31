@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,11 @@ import 'presentation/screens/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Enable high-refresh-rate input resampling and vsync for 90/120Hz displays
+  // This ensures gestures and animations run at the display's native refresh rate
+  // instead of being clamped to 60Hz.
+  GestureBinding.instance.resamplingEnabled = true;
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

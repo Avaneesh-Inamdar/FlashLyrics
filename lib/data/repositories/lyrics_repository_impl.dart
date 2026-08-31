@@ -32,10 +32,11 @@ class LyricsRepositoryImpl implements LyricsRepository {
       return cachedLyrics;
     }
 
-    // ONE parallel blast of ALL APIs at once (no sequential fallback nonsense)
+    // ONE parallel blast of ALL APIs at once, respecting user provider priority
     final lyrics = await _remoteDataSource.fetchAllParallel(
       song.artist,
       song.title,
+      providerPriority: providerPriority,
     );
 
     if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
@@ -63,7 +64,11 @@ class LyricsRepositoryImpl implements LyricsRepository {
     }
 
     // ONE parallel blast of ALL APIs
-    final lyrics = await _remoteDataSource.fetchAllParallel(artist, title);
+    final lyrics = await _remoteDataSource.fetchAllParallel(
+      artist,
+      title,
+      providerPriority: providerPriority,
+    );
 
     if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
       await _localDataSource.cacheLyrics(lyrics);

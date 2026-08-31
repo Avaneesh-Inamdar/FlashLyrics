@@ -11,6 +11,7 @@ import '../../core/constants/app_constants.dart';
 import '../../services/media_detection_service.dart';
 import '../providers/settings_provider.dart';
 import '../providers/media_provider.dart';
+import '../providers/providers.dart';
 import 'licenses_screen.dart';
 
 /// Settings screen with modern glassmorphism UI
@@ -208,6 +209,18 @@ class SettingsScreen extends ConsumerWidget {
                         }),
                       ],
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildSection(
+                context,
+                title: 'STORAGE',
+                delay: 280,
+                children: [
+                  _buildGlassCard(
+                    context,
+                    child: _buildStorageSection(context, ref),
                   ),
                 ],
               ),
@@ -504,6 +517,98 @@ class SettingsScreen extends ConsumerWidget {
                 end: const Offset(1.0, 1.0),
                 duration: 800.ms,
               ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStorageSection(BuildContext context, WidgetRef ref) {
+    final local = ref.watch(lyricsLocalDataSourceProvider);
+    final cachedAsync = ref.watch(cachedLyricsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+    final textSecondary = isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+    final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
+
+    final count = local.getCacheCount();
+    final size = local.getCacheSizeFormatted();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [AppTheme.primaryColor.withValues(alpha: 0.2), AppTheme.primaryColor.withValues(alpha: 0.1)]),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.storage_rounded, color: AppTheme.primaryLight, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Cached Lyrics', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary)),
+                    Text('$count songs • $size', style: TextStyle(fontSize: 13, color: textSecondary)),
+                  ],
+                ),
+              ),
+              cachedAsync.maybeWhen(
+                data: (list) => Text('${list.length}', style: TextStyle(color: textHint, fontWeight: FontWeight.w600)),
+                orElse: () => const SizedBox.shrink(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.delete_sweep_rounded, size: 18),
+                  label: const Text('Clear Cache'),
+                  style: OutlinedButton.styleFrom(foregroundColor: count == 0 ? textHint : AppTheme.errorColor),
+                  onPressed: count == 0
+                      ? null
+                      : () async {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Clear cached lyrics?'),
+                              content: Text('Delete all $count cached songs ($size)? This cannot be undone.'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                FilledButton(
+                                  style: FilledButton.styleFrom(backgroundColor: AppTheme.errorColor),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('Clear All'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed != true) return;
+                          await local.clearAllCache();
+                          ref.invalidate(cachedLyricsProvider);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cache cleared')));
+                          }
+                        },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Refresh'),
+                  onPressed: () => ref.invalidate(cachedLyricsProvider),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
