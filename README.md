@@ -14,12 +14,12 @@ Android app that detects what song you're playing and shows the lyrics. Works wi
 
 ## Download
 
-**Latest Version: v1.3.0 (v1.30)**
+**v1.3.0 Coming Soon!**
 
-Grab the latest APK from [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest).
+A brand new version of **FlashLyrics (v1.3.0)** will be available in **2–3 days**, both on [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases) and directly on the **Google Play Store**!
 
-> ⚠️ **IMPORTANT UPGRADE NOTE**:
-> If you currently have **v1.2.0 or an earlier version** installed, **please uninstall the old version first** before installing v1.3.0+. FlashLyrics is transitioning to the Google Play Store and now uses an official release signing key. Attempting to install v1.3.0 over v1.2.0 directly will fail with an Android signature mismatch ("App not installed") error.
+> ⚠️ **Important Note for Existing Users (v1.2.0 or earlier)**:
+> When v1.3.0 launches, please make sure to **uninstall your existing version first** before installing, as FlashLyrics is transitioning to the Google Play Store with an official release signing key. Attempting to install over v1.2 directly will cause a signature mismatch ("App not installed") error.
 
 ## What's New in v1.3.0
 
