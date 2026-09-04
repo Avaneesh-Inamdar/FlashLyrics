@@ -37,7 +37,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.flashlyrics.app"
+        applicationId = "music.flashlyrics.app"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
