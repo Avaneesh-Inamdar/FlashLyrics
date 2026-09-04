@@ -74,53 +74,55 @@ class AppTheme {
   static Color get primaryDark => _palette.primaryDark;
   static Color get secondaryColor => _palette.secondary;
   static Color get accentColor => _palette.accent;
-  static const Color backgroundColor = Color(0xFF0A0A0B); // Near black
-  static const Color surfaceColor = Color(0xFF111115); // Elevated surface
-  static const Color surfaceLight = Color(0xFF1A1A21); // Lighter surface
-  static const Color errorColor = Color(0xFFEF4444); // Red
-  static const Color successColor = Color(0xFF22C55E); // Green
+  // Refined, less "vibecoded" palette - muted, editorial, minimal gradients
+  static const Color backgroundColor = Color(0xFF0E0E10); // Soft near-black, less harsh
+  static const Color surfaceColor = Color(0xFF18181B); // Neutral zinc surface
+  static const Color surfaceLight = Color(0xFF232328); // Slightly lighter for borders
+  static const Color errorColor = Color(0xFFE5484D); // Muted red
+  static const Color successColor = Color(0xFF2EB872); // Muted green
 
   // Text colors (Dark Mode)
   static const Color textPrimary = Color(0xFFF5F5F7); // Soft white
   static const Color textSecondary = Color(0xFFB3B3C2); // Muted gray
   static const Color textHint = Color(0xFF7A7A8C); // Subtle gray
 
-  // Light Mode Colors
-  static const Color lightBackground = Color(0xFFFDFBF7);
+  // Light Mode Colors - cleaner, less warm, more neutral
+  static const Color lightBackground = Color(0xFFF8F8F7);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightSurfaceLight = Color(0xFFF3F0E8);
-  static const Color lightTextPrimary = Color(0xFF1A1A1A);
-  static const Color lightTextSecondary = Color(0xFF4B4B4B);
-  static const Color lightTextHint = Color(0xFF8C8C8C);
+  static const Color lightSurfaceLight = Color(0xFFEDEDEC);
+  static const Color lightTextPrimary = Color(0xFF18181B);
+  static const Color lightTextSecondary = Color(0xFF71717A);
+  static const Color lightTextHint = Color(0xFFA1A1AA);
 
-  // Light Mode Gradients
+  // Kept for backward compat but now solid-like, minimal contrast
   static const LinearGradient lightBackgroundGradient = LinearGradient(
-    colors: [Color(0xFFFDFBF7), Color(0xFFF2EDE4)],
+    colors: [Color(0xFFF8F8F7), Color(0xFFF1F1F0)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient lightCardGradient = LinearGradient(
-    colors: [Color(0xFFFFFFFF), Color(0xFFF7F2E8)],
+    colors: [Color(0xFFFFFFFF), Color(0xFFFFFFFF)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // Gradient presets
+  // Subtle primary gradient - now very close tones for less "gradient-heavy" look
   static LinearGradient get primaryGradient => LinearGradient(
-    colors: [primaryColor, primaryLight],
+    colors: [primaryColor, primaryColor],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
+  // Solid-like gradients to avoid heavy vibecoded look
   static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFF0A0A0B), Color(0xFF121217)],
+    colors: [Color(0xFF0E0E10), Color(0xFF0E0E10)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF141418), Color(0xFF0D0D10)],
+    colors: [Color(0xFF18181B), Color(0xFF18181B)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

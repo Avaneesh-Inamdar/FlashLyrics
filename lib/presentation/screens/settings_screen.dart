@@ -21,29 +21,27 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
-    final mediaState = ref.watch(mediaNotifierProvider);
     final hasPermission = ref.watch(hasNotificationAccessProvider);
+    final hasOverlayPermission = ref.watch(hasOverlayPermissionProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Theme-aware background gradient
-    final backgroundGradient = isDark
-        ? AppTheme.backgroundGradient
-        : AppTheme.lightBackgroundGradient;
-
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: false,
+      backgroundColor: isDark ? AppTheme.backgroundColor : AppTheme.lightBackground,
       appBar: AppBar(
-        title: ShaderMask(
-          shaderCallback: (bounds) =>
-              AppTheme.primaryGradient.createShader(bounds),
-          child: const Text(
-            'Settings',
-            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+        backgroundColor: isDark ? AppTheme.backgroundColor : AppTheme.lightBackground,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          'Settings',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : AppTheme.lightTextPrimary,
           ),
         ),
       ),
       body: Container(
-        decoration: BoxDecoration(gradient: backgroundGradient),
+        color: isDark ? AppTheme.backgroundColor : AppTheme.lightBackground,
         child: SafeArea(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
@@ -55,7 +53,13 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
                   _buildGlassCard(
                     context,
-                    child: _buildPermissionTile(context, hasPermission),
+                    child: Column(
+                      children: [
+                        _buildPermissionTile(context, hasPermission),
+                        _buildDivider(context),
+                        _buildOverlayPermissionTile(context, hasOverlayPermission),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -107,6 +111,58 @@ class SettingsScreen extends ConsumerWidget {
                                 .read(settingsProvider.notifier)
                                 .setKeepScreenOn(value);
                           },
+                        ),
+                        _buildDivider(context),
+                        _buildSwitchTile(
+                          context,
+                          icon: Icons.picture_in_picture_alt_rounded,
+                          title: 'Floating Lyrics',
+                          subtitle: 'Show lyrics over other apps (needs overlay permission)',
+                          value: settings.floatingLyricsEnabled,
+                          onChanged: (value) async {
+                            if (value) {
+                              final hasOverlay = await MediaDetectionService.checkOverlayPermission();
+                              if (!hasOverlay) {
+                                if (context.mounted) {
+                                  final ok = await _showOverlayRationale(context);
+                                  if (!ok) return;
+                                }
+                                await MediaDetectionService.requestOverlayPermission();
+                                // re-check after returning
+                                await Future.delayed(const Duration(seconds: 1));
+                                final nowHas = await MediaDetectionService.checkOverlayPermission();
+                                if (!nowHas) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Overlay permission is required for floating lyrics')));
+                                  }
+                                  return;
+                                }
+                                ref.invalidate(hasOverlayPermissionProvider);
+                              }
+                            }
+                            ref.read(settingsProvider.notifier).setFloatingLyricsEnabled(value);
+                            if (value && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Floating lyrics enabled. Use the button on Home to show overlay.')));
+                            }
+                          },
+                        ),
+                        _buildDivider(context),
+                        _buildSwitchTile(
+                          context,
+                          icon: Icons.touch_app_rounded,
+                          title: 'Overlay Tap-to-Seek',
+                          subtitle: settings.floatingLyricsEnabled
+                              ? 'Tap a line in floating window to seek • also enables scrolling'
+                              : 'Enable Floating Lyrics first',
+                          value: settings.floatingOverlaySeekEnabled,
+                          onChanged: settings.floatingLyricsEnabled
+                              ? (value) {
+                                  ref.read(settingsProvider.notifier).setFloatingOverlaySeekEnabled(value);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value ? 'Tap-to-seek + scrolling enabled in overlay' : 'Overlay tap-to-seek disabled')));
+                                  }
+                                }
+                              : null,
                         ),
                       ],
                     ),
@@ -232,7 +288,41 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
                   _buildGlassCard(
                     context,
-                    child: _buildStatusTile(context, mediaState),
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final isListening = ref.watch(mediaNotifierProvider.select((s) => s.isListening));
+                        return _buildStatusTile(context, isListening);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildSection(
+                context,
+                title: 'SUPPORT & ADS',
+                delay: 350,
+                children: [
+                  _buildGlassCard(
+                    context,
+                    child: Column(
+                      children: [
+                        _buildBuyMeACoffeeTile(context),
+                        _buildDivider(context),
+                        _buildSwitchTile(
+                          context,
+                          icon: Icons.ad_units_rounded,
+                          title: 'Show Ads',
+                          subtitle: 'Display banner ads to support development',
+                          value: settings.enableAds,
+                          onChanged: (value) {
+                            ref
+                                .read(settingsProvider.notifier)
+                                .setEnableAds(value);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -250,16 +340,10 @@ class SettingsScreen extends ConsumerWidget {
                           context,
                           icon: Icons.info_outline_rounded,
                           title: 'App Version',
-                          subtitle: AppConstants.appVersion,
+                          subtitle: '${AppConstants.appVersion} (Play Store Ready)',
                         ),
                         _buildDivider(context),
-                        _buildTapTile(
-                          context,
-                          icon: Icons.system_update_rounded,
-                          title: 'Check for Updates',
-                          subtitle: 'Check for new versions on GitHub',
-                          onTap: () => _checkForUpdates(context),
-                        ),
+                        _buildNoteCard(context),
                         _buildDivider(context),
                         _buildTapTile(
                           context,
@@ -328,29 +412,13 @@ class SettingsScreen extends ConsumerWidget {
         ? AppTheme.surfaceLight
         : AppTheme.lightSurfaceLight;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                surfaceColor.withValues(alpha: 0.7),
-                surfaceLight.withValues(alpha: 0.5),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: surfaceLight.withValues(alpha: 0.5),
-              width: 1,
-            ),
-          ),
-          child: child,
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: surfaceLight, width: 1),
       ),
+      child: child,
     );
   }
 
@@ -431,7 +499,204 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusTile(BuildContext context, MediaState mediaState) {
+  Widget _buildOverlayPermissionTile(
+    BuildContext context,
+    AsyncValue<bool> hasPermission,
+  ) {
+    return hasPermission.when(
+      data: (granted) => _buildTapTile(
+        context,
+        icon: Icons.picture_in_picture_alt_rounded,
+        title: 'Display over other apps',
+        subtitle: granted ? 'Granted — floating lyrics enabled' : 'Required for floating lyrics overlay',
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: (granted ? AppTheme.successColor : Colors.orange).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: (granted ? AppTheme.successColor : Colors.orange).withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(granted ? Icons.check_circle_rounded : Icons.warning_rounded, size: 16, color: granted ? AppTheme.successColor : Colors.orange),
+              const SizedBox(width: 6),
+              Text(granted ? 'Active' : 'Grant', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: granted ? AppTheme.successColor : Colors.orange)),
+            ],
+          ),
+        ),
+        onTap: () async {
+          await MediaDetectionService.requestOverlayPermission();
+        },
+      ),
+      loading: () => _buildTapTile(
+        context,
+        icon: Icons.layers_rounded,
+        title: 'Floating overlay',
+        subtitle: 'Checking...',
+        trailing: const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (_, _) => _buildTapTile(
+        context,
+        icon: Icons.layers_rounded,
+        title: 'Floating overlay',
+        subtitle: 'Error checking status',
+        trailing: const Icon(Icons.error_rounded, color: AppTheme.errorColor),
+      ),
+    );
+  }
+
+  Future<bool> _showOverlayRationale(BuildContext context) async {
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Allow overlay?'),
+        content: const Text('FlashLyrics needs "Display over other apps" to show lyrics in a floating window while you use Spotify, YouTube Music, etc. You will be taken to system settings.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Allow')),
+        ],
+      ),
+    );
+    return res == true;
+  }
+
+  Widget _buildBuyMeACoffeeTile(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const bmcYellow = Color(0xFFFFDD00);
+    const bmcBlack = Color(0xFF000000);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          final uri = Uri.parse('https://buymeacoffee.com/avaneeshinamdar');
+          try {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } catch (e) {
+            debugPrint('Could not launch BuyMeACoffee: $e');
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: bmcYellow,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: bmcYellow.withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.coffee_rounded,
+                  color: bmcBlack,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Buy Me a Coffee',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Support development & future features',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: bmcYellow.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: bmcYellow.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Support',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? bmcYellow : const Color(0xFFB8860B),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.open_in_new_rounded,
+                      size: 13,
+                      color: isDark ? bmcYellow : const Color(0xFFB8860B),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoteCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.amber.withValues(alpha: isDark ? 0.12 : 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.amber.withValues(alpha: isDark ? 0.35 : 0.25),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.new_releases_outlined, color: Colors.amber, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Upgrading from v1.2 or older? Please uninstall the old version first. Future updates will be delivered via Google Play Store with an official release key.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusTile(BuildContext context, bool isActive) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = isDark
         ? AppTheme.textPrimary
@@ -440,7 +705,6 @@ class SettingsScreen extends ConsumerWidget {
         ? AppTheme.textSecondary
         : AppTheme.lightTextSecondary;
     final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
-    final isActive = mediaState.isListening;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -620,7 +884,7 @@ class SettingsScreen extends ConsumerWidget {
     required String title,
     required String subtitle,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    required ValueChanged<bool>? onChanged,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = isDark
@@ -1343,18 +1607,23 @@ class SettingsScreen extends ConsumerWidget {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: const Row(
+                                  content: Row(
                                     children: [
-                                      Icon(
+                                      const Icon(
                                         Icons.check_circle_rounded,
                                         color: AppTheme.successColor,
                                         size: 20,
                                       ),
-                                      SizedBox(width: 12),
-                                      Text('Settings reset to defaults'),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Settings reset to defaults',
+                                        style: TextStyle(color: textPrimary),
+                                      ),
                                     ],
                                   ),
-                                  backgroundColor: AppTheme.surfaceLight,
+                                  backgroundColor: isDark
+                                      ? AppTheme.surfaceLight
+                                      : AppTheme.lightSurfaceLight,
                                   behavior: SnackBarBehavior.floating,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),

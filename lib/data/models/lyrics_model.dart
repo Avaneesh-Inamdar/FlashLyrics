@@ -7,6 +7,10 @@ class LyricsModel extends Lyrics {
   final String? trackName;
   final String? albumName;
 
+  /// True only when automatic lookup verified provider metadata against the
+  /// currently playing artist and title.
+  final bool isMatchVerified;
+
   const LyricsModel({
     required super.id,
     required super.songId,
@@ -18,6 +22,7 @@ class LyricsModel extends Lyrics {
     this.artistName,
     this.trackName,
     this.albumName,
+    this.isMatchVerified = false,
   });
 
   /// Create from JSON
@@ -35,6 +40,7 @@ class LyricsModel extends Lyrics {
       artistName: json['artistName'] as String?,
       trackName: json['trackName'] as String?,
       albumName: json['albumName'] as String?,
+      isMatchVerified: json['isMatchVerified'] as bool? ?? false,
     );
   }
 
@@ -51,6 +57,7 @@ class LyricsModel extends Lyrics {
       'artistName': artistName,
       'trackName': trackName,
       'albumName': albumName,
+      'isMatchVerified': isMatchVerified,
     };
   }
 
@@ -64,6 +71,7 @@ class LyricsModel extends Lyrics {
       isSynced: lyrics.isSynced,
       source: lyrics.source,
       fetchedAt: lyrics.fetchedAt,
+      isMatchVerified: false,
     );
   }
 

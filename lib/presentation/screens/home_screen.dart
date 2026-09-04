@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../services/media_detection_service.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
@@ -12,6 +12,7 @@ import '../widgets/lyrics_display.dart';
 import '../widgets/song_card.dart';
 import '../widgets/song_controls.dart';
 import '../widgets/permission_card.dart';
+import '../widgets/floating_overlay_button.dart';
 import 'search_screen.dart';
 
 /// Home screen showing current song and lyrics
@@ -26,8 +27,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(mediaNotifierProvider.notifier).checkPermissions();
+      // Request post-notification permission for music detection toasts (Android 13+)
+      try {
+        final hasPost = await MediaDetectionService.checkPostNotificationPermission();
+        if (!hasPost) await MediaDetectionService.requestPostNotificationPermission();
+      } catch (_) {}
       // Initialize by fetching current song if available
       _initializeCurrentSong();
     });
@@ -61,11 +67,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsNotifierProvider);
-    final mediaState = ref.watch(mediaNotifierProvider);
+    final hasPermission = ref.watch(mediaNotifierProvider.select((s) => s.hasPermission));
+    final isListening = ref.watch(mediaNotifierProvider.select((s) => s.isListening));
+    final isPlaying = ref.watch(mediaNotifierProvider.select((s) => s.isPlaying));
+    final hasMediaSong = ref.watch(mediaNotifierProvider.select((s) => s.currentDuration.inMilliseconds > 0 || s.currentSong != null));
     final settings = ref.watch(settingsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final showLoadingBackground =
-        lyricsState.isLoading && lyricsState.lyrics == null;
+
+    // Cache latest lyrics for native notification -> floating window (battery-efficient)
+    // Note: Overlay auto-update (title/lrc swap when song changes) is now handled centrally
+    // inside OverlayNotifier's lyrics listener. This cache is kept as redundant safety for
+    // the native notification's "Float" action and the service's cache-polling fallback.
+    ref.listen<LyricsState>(lyricsNotifierProvider, (prev, next) {
+      if (next.lyrics != null && next.currentSong != null) {
+        final lrc = next.lyrics!.lrcLyrics ?? '';
+        final plain = next.lyrics!.plainLyrics;
+        // Use fresh settings to avoid stale capture
+        final s = ref.read(settingsProvider);
+        MediaDetectionService.cacheOverlayLyricsStatic(
+          title: next.currentSong!.title,
+          artist: next.currentSong!.artist,
+          lrcLyrics: lrc,
+          plainLyrics: plain,
+          syncOffsetMs: s.lyricsSyncOffset,
+          enableSeek: s.floatingOverlaySeekEnabled,
+        );
+      }
+    });
+    // Also re-cache when sync offset or seek toggle changes
+    ref.listen<AppSettings>(settingsProvider, (prev, next) {
+      final offsetChanged = prev?.lyricsSyncOffset != next.lyricsSyncOffset;
+      final seekChanged = prev?.floatingOverlaySeekEnabled != next.floatingOverlaySeekEnabled;
+      if (offsetChanged || seekChanged) {
+        final cur = ref.read(lyricsNotifierProvider);
+        if (cur.lyrics != null && cur.currentSong != null) {
+          final lrc = cur.lyrics!.lrcLyrics ?? '';
+          final plain = cur.lyrics!.plainLyrics;
+          MediaDetectionService.cacheOverlayLyricsStatic(
+            title: cur.currentSong!.title,
+            artist: cur.currentSong!.artist,
+            lrcLyrics: lrc,
+            plainLyrics: plain,
+            syncOffsetMs: next.lyricsSyncOffset,
+            enableSeek: next.floatingOverlaySeekEnabled,
+          );
+        } else if (seekChanged) {
+          // No song yet — still persist seek flag for future overlay (cache with empty lyrics keeps flag)
+          // We keep last cached title if any; otherwise do a lightweight seek flag persist via empty update
+          // Use try to avoid crash if cache empty
+          try {
+            final cur2 = ref.read(lyricsNotifierProvider);
+            if (cur2.currentSong != null) {
+              MediaDetectionService.cacheOverlayLyricsStatic(
+                title: cur2.currentSong!.title,
+                artist: cur2.currentSong!.artist,
+                lrcLyrics: cur2.lyrics?.lrcLyrics ?? '',
+                plainLyrics: cur2.lyrics?.plainLyrics ?? '',
+                syncOffsetMs: next.lyricsSyncOffset,
+                enableSeek: next.floatingOverlaySeekEnabled,
+              );
+            }
+          } catch (_) {}
+        }
+      }
+    });
 
     // Keep screen on when showing lyrics and setting is enabled
     if (settings.keepScreenOn &&
@@ -75,45 +140,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } else {
       WakelockPlus.disable();
     }
-
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(mediaState, isDark),
-      body: Container(
-        decoration: BoxDecoration(
-          color: showLoadingBackground
-              ? (isDark ? AppTheme.backgroundColor : AppTheme.lightBackground)
-              : null,
-          gradient: showLoadingBackground
-              ? null
-              : (isDark
-                    ? AppTheme.backgroundGradient
-                    : AppTheme.lightBackgroundGradient),
-        ),
-        child: SafeArea(child: _buildBody(lyricsState, mediaState)),
-      ),
+      extendBodyBehindAppBar: false,
+      appBar: _buildAppBar(isListening, isPlaying, isDark),
+      backgroundColor: isDark ? AppTheme.backgroundColor : AppTheme.lightBackground,
+      body: SafeArea(child: _buildBody(lyricsState, hasPermission, hasMediaSong)),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(MediaState mediaState, bool isDark) {
+  PreferredSizeWidget _buildAppBar(bool isListening, bool isPlaying, bool isDark) {
     return AppBar(
+      backgroundColor: isDark ? AppTheme.backgroundColor : AppTheme.lightBackground,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ShaderMask(
-            shaderCallback: (bounds) =>
-                AppTheme.primaryGradient.createShader(bounds),
-            child: const Text(
-              'FlashLyrics',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
+          Text(
+            'FlashLyrics',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppTheme.lightTextPrimary,
+              fontSize: 20,
             ),
           ),
-          if (mediaState.isListening) ...[
+          if (isListening) ...[
             const SizedBox(width: 10),
-            _buildStatusIndicator(mediaState),
+            _buildStatusIndicator(isPlaying),
           ],
         ],
       ),
@@ -140,9 +193,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to refresh: $e'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
                 }
               }
             },
@@ -152,8 +208,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildStatusIndicator(MediaState mediaState) {
-    final isPlaying = mediaState.isPlaying;
+  Widget _buildStatusIndicator(bool isPlaying) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -211,7 +266,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildBody(LyricsState lyricsState, MediaState mediaState) {
+  Widget _buildBody(LyricsState lyricsState, bool hasPermission, bool hasMediaSong) {
     // If we have lyrics from search, show them regardless of permission status
     if (lyricsState.currentSong != null) {
       return SingleChildScrollView(
@@ -219,29 +274,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             SongCard(song: lyricsState.currentSong!),
-            const SizedBox(height: 16),
-            // Song controls with seek bar
-            if (mediaState.currentDuration.inMilliseconds > 0)
+            const SizedBox(height: 8),
+            // Song controls with seek bar + next/prev
+            if (hasMediaSong)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SongControls(
-                  currentPosition: mediaState.currentPosition,
-                  totalDuration: mediaState.currentDuration,
-                  isPlaying: mediaState.isPlaying,
-                  onSeek: (position) {
-                    ref.read(mediaNotifierProvider.notifier).seekTo(position);
-                  },
-                  onPlayPause: () {
-                    ref
-                        .read(mediaNotifierProvider.notifier)
-                        .setPlaying(!mediaState.isPlaying);
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final currentPos = ref.watch(mediaNotifierProvider.select((s) => s.currentPosition));
+                    final totalDur = ref.watch(mediaNotifierProvider.select((s) => s.currentDuration));
+                    final playing = ref.watch(mediaNotifierProvider.select((s) => s.isPlaying));
+                    return SongControls(
+                      currentPosition: currentPos,
+                      totalDuration: totalDur.inMilliseconds > 0
+                          ? totalDur
+                          : (lyricsState.currentSong?.duration ?? Duration.zero),
+                      isPlaying: playing,
+                      onSeek: (position) {
+                        ref.read(mediaNotifierProvider.notifier).seekTo(position);
+                      },
+                      onPlayPause: () {
+                        ref
+                            .read(mediaNotifierProvider.notifier)
+                            .setPlaying(!playing);
+                      },
+                      onNext: () {
+                        ref.read(mediaNotifierProvider.notifier).skipToNext();
+                      },
+                      onPrevious: () {
+                        ref.read(mediaNotifierProvider.notifier).skipToPrevious();
+                      },
+                    );
                   },
                 ),
               ),
-            if (mediaState.currentDuration.inMilliseconds > 0)
-              const SizedBox(height: 16),
+            const SizedBox(height: 6),
+            // Floating overlay button (when song available)
+            if (lyricsState.currentSong != null && lyricsState.lyrics != null)
+              const FloatingLyricsButton(),
+            const SizedBox(height: 4),
             if (lyricsState.isLoading && lyricsState.lyrics == null)
               _buildLoadingState()
             else if (lyricsState.error != null && lyricsState.lyrics == null)
@@ -249,12 +322,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             else if (lyricsState.lyrics != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: LyricsDisplay(
-                  lyrics: lyricsState.lyrics!,
-                  currentPosition: mediaState.currentPosition,
-                  isPlaying: mediaState.isPlaying,
-                  onSeek: (position) {
-                    ref.read(mediaNotifierProvider.notifier).seekTo(position);
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final currentPos = ref.watch(mediaNotifierProvider.select((s) => s.currentPosition));
+                    final playing = ref.watch(mediaNotifierProvider.select((s) => s.isPlaying));
+                    return LyricsDisplay(
+                      lyrics: lyricsState.lyrics!,
+                      currentPosition: currentPos,
+                      isPlaying: playing,
+                      onSeek: (position) {
+                        ref.read(mediaNotifierProvider.notifier).seekTo(position);
+                      },
+                    );
                   },
                 ),
               )
@@ -266,8 +345,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    if (!mediaState.hasPermission) {
-      return _buildPermissionRequest(mediaState);
+    if (!hasPermission) {
+      return _buildPermissionRequest();
     }
 
     if (lyricsState.isLoading) {
@@ -278,7 +357,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return _buildErrorState(lyricsState.error!);
     }
 
-    return _buildEmptyState(mediaState);
+    return Consumer(
+      builder: (context, ref, _) {
+        final isListening = ref.watch(mediaNotifierProvider.select((s) => s.isListening));
+        return _buildEmptyState(isListening: isListening);
+      },
+    );
   }
 
   Widget _buildLoadingState() {
@@ -314,7 +398,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ).animate().fadeIn(duration: 300.ms);
   }
 
-  Widget _buildPermissionRequest(MediaState mediaState) {
+  Widget _buildPermissionRequest() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -330,7 +414,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0);
   }
 
-  Widget _buildEmptyState(MediaState mediaState) {
+  Widget _buildEmptyState({required bool isListening}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
@@ -338,46 +422,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Animated icon container
+            // Static icon container - no repeating animation for performance
             Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppTheme.primaryColor.withValues(alpha: 0.15),
-                        AppTheme.primaryColor.withValues(alpha: 0.05),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                      width: 2,
-                    ),
-                  ),
-                  child: Icon(
-                    mediaState.isListening
-                        ? Icons.headphones_rounded
-                        : Icons.music_note_rounded,
-                    size: 56,
-                    color: AppTheme.primaryLight,
-                  ),
-                )
-                .animate(onPlay: (c) => c.repeat(reverse: true))
-                .scale(
-                  begin: const Offset(1.0, 1.0),
-                  end: const Offset(1.05, 1.05),
-                  duration: 1500.ms,
-                  curve: Curves.easeInOut,
-                )
-                .animate()
-                .fadeIn(duration: 500.ms)
-                .scale(begin: const Offset(0.8, 0.8)),
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(
+                isListening
+                    ? Icons.headphones_rounded
+                    : Icons.music_note_rounded,
+                size: 48,
+                color: AppTheme.primaryColor,
+              ),
+            ),
             const SizedBox(height: 32),
             Text(
-              mediaState.isListening
+              isListening
                   ? 'Listening for music...'
                   : 'No song playing',
               style: TextStyle(
@@ -391,7 +458,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ).animate().fadeIn(delay: 100.ms),
             const SizedBox(height: 12),
             Text(
-              mediaState.isListening
+              isListening
                   ? 'Play a song on Spotify, YouTube Music,\nor any music app'
                   : 'Enable music detection to get started',
               textAlign: TextAlign.center,
@@ -464,41 +531,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ).animate().fadeIn(delay: 250.ms).slideY(begin: 0.1, end: 0),
         const SizedBox(height: 16),
-        // Fun tip card
+        // Fun tip card - solid, no blur
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppTheme.primaryColor.withValues(alpha: isDark ? 0.15 : 0.1),
-                AppTheme.primaryColor.withValues(alpha: isDark ? 0.08 : 0.05),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
+            color: isDark ? AppTheme.surfaceColor : AppTheme.lightSurface,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: AppTheme.primaryColor.withValues(alpha: 0.2),
+              color: AppTheme.primaryColor.withValues(alpha: 0.15),
             ),
           ),
           child: Row(
             children: [
               Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.primaryGradient,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Text(
-                        randomTip.$1,
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                    ),
-                  )
-                  .animate(onPlay: (c) => c.repeat(reverse: true))
-                  .rotate(begin: -0.02, end: 0.02, duration: 2000.ms),
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    randomTip.$1,
+                    style: const TextStyle(fontSize: 22),
+                  ),
+                ),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(

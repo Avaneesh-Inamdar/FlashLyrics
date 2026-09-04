@@ -6,22 +6,31 @@
 
 Android app that detects what song you're playing and shows the lyrics. Works with Spotify, YouTube Music, Apple Music, JioSaavn, Gaana, SoundCloud, and pretty much any music app.
 
+<p align="center">
+  <a href="https://buymeacoffee.com/avaneeshinamdar" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="42"></a>
+  &nbsp;&nbsp;
+  <a href="#" target="_blank"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="42"></a>
+</p>
+
 ## Download
 
-**Latest Version: v1.2.0**
+**Latest Version: v1.3.0 (v1.30)**
 
-Grab the latest APK from [Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases).
+Grab the latest APK from [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest).
 
-⚠️ **Important**: This release uses a new signing key. If you have v1.0 installed, you'll need to uninstall it first before installing v1.2.0.
+> ⚠️ **IMPORTANT UPGRADE NOTE**:
+> If you currently have **v1.2.0 or an earlier version** installed, **please uninstall the old version first** before installing v1.3.0+. FlashLyrics is transitioning to the Google Play Store and now uses an official release signing key. Attempting to install v1.3.0 over v1.2.0 directly will fail with an Android signature mismatch ("App not installed") error.
 
-## What's New in v1.2.0
+## What's New in v1.3.0
 
-- 🖼️ **Album Cover in Shared Images**: Shared lyrics now include the song's album artwork
-- 📏 **Dynamic Text Sizing**: Lyrics text automatically adjusts based on the number of lines selected
-- ⚡ **Performance Improvements**: Fixed memory leaks and optimized image generation
-- 🐛 **Bug Fixes**: Improved stability and resource management
-
-[View Full Changelog](RELEASE_NOTES_v1.2.md)
+- 🪟 **Floating Lyrics Overlay Window**: Always-on-top lyrics widget over Spotify, YouTube Music, Apple Music, and more with real-time scrolling, tap-to-seek, and fluid multidirectional resizing.
+- ⏳ **Instant Skeleton Loading**: Seamless skeleton transition effect in the floating overlay as soon as tracks switch.
+- 🔔 **Now Playing Media Notification**: Persistent notification keeping track info accessible with a 1-tap **"Float"** button to summon the floating lyrics instantly without opening the full app.
+- ⚡ **Zero-Jank Ultra Smooth Performance**: Eliminated frame drops and main-thread rebuilds for silky 120Hz scrolling and instantaneous app switching.
+- 📤 **Intelligent Share Navigation**: Opening lyric sharing automatically highlights and scrolls straight to the currently playing line, with centered formatting and album cover art included.
+- ☕ **Buy Me a Coffee Support**: Direct developer support integration in Settings.
+- 📢 **Ad-Supported with Toggle**: Non-intrusive banner ads with a one-click toggle in Settings to turn off anytime.
+- 🏬 **Google Play Store Preparation**: Full compatibility and updated signing keys for Google Play release.
 
 ## Features
 

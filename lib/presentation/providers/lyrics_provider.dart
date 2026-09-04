@@ -46,6 +46,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
   final GetCachedLyricsUseCase _getCachedLyricsUseCase;
   final List<String> _providerPriority;
   int _latestSearchId = 0; // Track latest search to prevent race conditions
+  int _latestSongRequestId = 0;
 
   LyricsNotifier({
     required GetLyricsUseCase getLyricsUseCase,
@@ -60,6 +61,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   /// Set current song and fetch lyrics
   Future<void> setSong(Song song, {bool forceRefresh = false}) async {
+    final requestId = ++_latestSongRequestId;
     if (kDebugMode) {
       debugPrint('🎵 Fetching lyrics for: ${song.title} by ${song.artist}');
     }
@@ -72,19 +74,76 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
     );
 
     try {
-      // Check cache first unless forced refresh (use generated songId for consistency)
-      final songId = '${song.artist}_${song.title}'
+      // Check cache first unless forced refresh (Unicode-aware songId to avoid Hindi collisions)
+      final rawId = '${song.artist.trim()}_${song.title.trim()}'
           .toLowerCase()
-          .replaceAll(RegExp(r'[^a-z0-9_]'), '_')
-          .replaceAll(RegExp(r'_+'), '_');
+          .replaceAll(RegExp(r'\s+'), '_');
+      String songId;
+      try {
+        songId = rawId
+            .replaceAll(RegExp(r'[^\p{L}\p{N}_]+', unicode: true), '_')
+            .replaceAll(RegExp(r'_+'), '_')
+            .replaceAll(RegExp(r'^_|_$'), '');
+      } catch (_) {
+        songId = rawId
+            .replaceAll(
+              RegExp(r'[^a-zA-Z0-9_\u0900-\u097F\u4E00-\u9FFF]+'),
+              '_',
+            )
+            .replaceAll(RegExp(r'_+'), '_')
+            .replaceAll(RegExp(r'^_|_$'), '');
+      }
+      if (songId.isEmpty)
+        songId = '${song.artist}_${song.title}'.hashCode.toString();
       if (!forceRefresh) {
         final cached = await _getCachedLyricsUseCase(songId);
         if (cached != null) {
-          if (kDebugMode) {
-            debugPrint('✅ Using cached lyrics for ${song.title}');
+          bool cacheValid = true;
+          // Only LyricsModel has artistName/trackName for verification
+          if (cached is LyricsModel) {
+            // Older cache entries predate metadata verification. Refresh them
+            // once rather than allowing an old wrong match to stay pinned.
+            if (!cached.isMatchVerified) cacheValid = false;
+            final cArtist = cached.artistName ?? '';
+            final cTitle = cached.trackName ?? '';
+            if (cArtist.isNotEmpty && cTitle.isNotEmpty) {
+              final reqA = song.artist.toLowerCase().trim();
+              final reqT = song.title.toLowerCase().trim();
+              final ca = cArtist.toLowerCase().trim();
+              final ct = cTitle.toLowerCase().trim();
+              final titleMatch =
+                  ct.contains(reqT) || reqT.contains(ct) || ct == reqT;
+              bool artistMatch = true;
+              if (reqA.isNotEmpty && ca.isNotEmpty) {
+                if (!(ca.contains(reqA) || reqA.contains(ca))) {
+                  final reqWords = reqA
+                      .split(RegExp(r'\s+'))
+                      .where((w) => w.length > 2)
+                      .toSet();
+                  final cWords = ca
+                      .split(RegExp(r'[\s,/&]+'))
+                      .where((w) => w.length > 2)
+                      .toSet();
+                  if (reqWords.intersection(cWords).isEmpty)
+                    artistMatch = false;
+                }
+              }
+              if (!titleMatch || !artistMatch) {
+                cacheValid = false;
+                if (kDebugMode)
+                  debugPrint(
+                    '⚠️ Cached mismatch for ${song.title} (cached: $cTitle by $cArtist), refetching',
+                  );
+              }
+            }
           }
-          state = state.copyWith(lyrics: cached, isLoading: false);
-          return;
+          if (cacheValid) {
+            if (kDebugMode)
+              debugPrint('✅ Using cached lyrics for ${song.title}');
+            if (requestId != _latestSongRequestId) return;
+            state = state.copyWith(lyrics: cached, isLoading: false);
+            return;
+          }
         }
       }
 
@@ -107,8 +166,12 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       if (kDebugMode) {
         debugPrint('✅ Successfully fetched lyrics for ${song.title}');
       }
+      // Media callbacks overlap during skips.  An older response must never
+      // overwrite lyrics for the song that is now playing.
+      if (requestId != _latestSongRequestId) return;
       state = state.copyWith(lyrics: lyrics, isLoading: false);
     } catch (e) {
+      if (requestId != _latestSongRequestId) return;
       if (kDebugMode) debugPrint('❌ Error fetching lyrics: $e');
       if (e is LyricsNotFoundException) {
         state = state.copyWith(

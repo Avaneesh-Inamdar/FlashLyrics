@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/exceptions.dart';
+import '../../core/utils/lrc_parser.dart';
 import '../models/lyrics_model.dart';
 
 /// Remote data source for fetching lyrics from multiple APIs
@@ -14,20 +15,36 @@ class LyricsRemoteDataSource {
   /// Clean and normalize text for better search results
   /// Handles Hindi, special characters, and common metadata issues
   String _normalizeText(String text, {bool isNonLatin = false}) {
-    // For non-Latin text (Hindi, Chinese, etc.), be more conservative with normalization
     if (isNonLatin) {
-      // Just normalize quotes and collapse whitespace for non-Latin text
-      var cleaned = text
-          .replaceAll(RegExp(r'[""„]'), '"') // Normalize quotes
-          .replaceAll(
-            RegExp(
-              r'['
-              ']',
-            ),
-            "'",
-          ) // Normalize apostrophes
-          .trim();
-      cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+      var cleaned = text.trim();
+      // Strip YouTube junk but preserve Hindi
+      cleaned = cleaned.replaceAll(
+        RegExp(r'\s*-\s*Topic\s*$', caseSensitive: false),
+        '',
+      );
+      cleaned = cleaned.replaceAll(
+        RegExp(
+          r'\s*-\s*(?:From|Official|Video|Audio|Lyrics|HD|HQ|4K|Slowed|Reverb).*',
+          caseSensitive: false,
+        ),
+        '',
+      );
+      cleaned = cleaned.replaceAll(RegExp(r'\s*\|\s*.*$'), '');
+      cleaned = cleaned.replaceAll(
+        RegExp(
+          r'\s*\((?:[^)]*(?:Official|Video|Audio|Lyrics|HD|HQ|4K|From|Topic|Slowed|Reverb)[^)]*)\)',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+      cleaned = cleaned.replaceAll(
+        RegExp(
+          r'\s*\[(?:[^]]*(?:Official|Video|Audio)[^\]]*)\]',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+      cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
       return cleaned;
     }
 
@@ -78,18 +95,45 @@ class LyricsRemoteDataSource {
     String title, {
     List<String>? providerPriority,
   }) async {
-    // Check if this is a non-English song upfront
-    final isNonLatin = _containsNonLatin('$artist$title');
-
+    final combinedForLang = '$artist$title';
+    final isNonLatin = _containsNonLatin(combinedForLang);
+    final hasDevanagari = RegExp(r'[\u0900-\u097F]').hasMatch(combinedForLang);
+    final hasCJK = RegExp(
+      r'[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]',
+    ).hasMatch(combinedForLang);
     // Normalize inputs for better matching
     final cleanArtist = _normalizeText(artist, isNonLatin: isNonLatin);
     final cleanTitle = _normalizeText(title, isNonLatin: isNonLatin);
     final songId = _generateSongId(artist, title);
     final errors = <String>[];
 
-    // For non-Latin songs, prioritize NetEase which has better Asian music support
+    // An explicit Settings order is authoritative. Language-aware defaults are
+    // useful only until the user has chosen an order of their own.
     List<String> priority;
-    if (isNonLatin) {
+    if (providerPriority != null) {
+      priority = List<String>.from(providerPriority);
+    } else if (hasCJK) {
+      // Chinese/Japanese/Korean: Netease is best
+      priority = [
+        'netease',
+        'lrclib',
+        'textyl',
+        'lyrics.ovh',
+        'lyrist',
+        'chartlyrics',
+      ];
+    } else if (hasDevanagari) {
+      // Hindi: LRCLIB has best coverage, deprioritize Netease (Chinese)
+      priority = [
+        'lrclib',
+        'textyl',
+        'lyrics.ovh',
+        'chartlyrics',
+        'lyrist',
+        'netease',
+      ];
+    } else if (isNonLatin) {
+      // Other non-Latin (Arabic etc.)
       priority = [
         'netease',
         'lrclib',
@@ -180,7 +224,24 @@ class LyricsRemoteDataSource {
           query,
         ).timeout(const Duration(seconds: 5));
         for (final result in searchResults) {
-          if (result.plainLyrics.isNotEmpty) {
+          if (result.plainLyrics.isEmpty) continue;
+          // Strict verification to avoid random mismatched lyrics (especially for Hindi/Hinglish)
+          final resArtist = result.artistName ?? '';
+          final resTitle = result.trackName ?? '';
+          // For search fallback, require good match with original or cleaned request
+          final matchesOriginal = _isGoodMatch(
+            artist,
+            title,
+            resArtist,
+            resTitle,
+          );
+          final matchesClean = _isGoodMatch(
+            cleanArtist,
+            cleanTitle,
+            resArtist,
+            resTitle,
+          );
+          if (matchesOriginal || matchesClean) {
             return result;
           }
         }
@@ -270,6 +331,14 @@ class LyricsRemoteDataSource {
           return null;
         }
 
+        // LRCLIB returns its own metadata.  Keep it instead of echoing the
+        // request: callers use this to reject a fuzzy/server-side mismatch.
+        final resultArtist = data['artistName'] as String? ?? '';
+        final resultTitle = data['trackName'] as String? ?? '';
+        if (!_isGoodMatch(artist, title, resultArtist, resultTitle)) {
+          return null;
+        }
+
         return LyricsModel(
           id: '${songId}_${DateTime.now().millisecondsSinceEpoch}',
           songId: songId,
@@ -280,8 +349,8 @@ class LyricsRemoteDataSource {
           isSynced: syncedLyrics != null && syncedLyrics.isNotEmpty,
           source: 'LRCLIB',
           fetchedAt: DateTime.now(),
-          artistName: artist.isNotEmpty ? artist : null,
-          trackName: title.isNotEmpty ? title : null,
+          artistName: resultArtist.isNotEmpty ? resultArtist : null,
+          trackName: resultTitle.isNotEmpty ? resultTitle : null,
         );
       }
       return null;
@@ -577,22 +646,18 @@ class LyricsRemoteDataSource {
     String title, {
     List<String>? providerPriority,
   }) async {
-    final songId = _generateSongId(artist, title);
-    final isNonLatin = _containsNonLatin('$artist$title');
+    final combinedLang = '$artist$title';
+    final isNonLatin = _containsNonLatin(combinedLang);
     final cleanArtist = _normalizeText(artist, isNonLatin: isNonLatin);
     final cleanTitle = _normalizeText(title, isNonLatin: isNonLatin);
 
-    // Determine effective priority: user order or default, with non-Latin boost for NetEase
-    List<String> effectivePriority = providerPriority ?? ApiConstants.apiPriority;
-    // Clone to avoid mutating caller's list
-    effectivePriority = List<String>.from(effectivePriority);
-    if (isNonLatin && effectivePriority.contains('netease')) {
-      // Move netease to front for non-Latin songs, preserving relative order otherwise
-      effectivePriority.remove('netease');
-      effectivePriority.insert(0, 'netease');
-    }
-    // Ensure all needed providers are considered; if priority is truncated, add missing defaults at end
-    // (user may have reordered a subset)
+    // Do not language-sort this list: the Settings screen is the user's
+    // explicit ranking and must be used exactly as saved.
+    final effectivePriority = List<String>.from(
+      providerPriority ?? ApiConstants.apiPriority,
+    );
+    // Keep the fallback set complete for automatic lookup while preserving
+    // every user-selected position.
     for (final p in ApiConstants.apiPriority) {
       if (!effectivePriority.contains(p)) effectivePriority.add(p);
     }
@@ -600,7 +665,12 @@ class LyricsRemoteDataSource {
     final futures = <Future<LyricsModel?>>[];
     final seen = <String>{};
 
-    Future<LyricsModel?> fetchForProvider(String provider, String a, String t, String sid) {
+    Future<LyricsModel?> fetchForProvider(
+      String provider,
+      String a,
+      String t,
+      String sid,
+    ) {
       switch (provider) {
         case 'lrclib':
           return _fetchFromLrclib(a, t, sid);
@@ -619,11 +689,17 @@ class LyricsRemoteDataSource {
       }
     }
 
-    void addForVariation(String a, String t) {
+    void addForVariation(String a, String t, {bool titleOnly = false}) {
       final key = '${a.toLowerCase()}|${t.toLowerCase()}';
       if (!seen.add(key)) return;
       final sid = _generateSongId(a, t);
-      for (final provider in effectivePriority) {
+      // A title-only query is intentionally restricted to providers that
+      // return real result metadata.  Several other APIs can return a
+      // plausible-but-unrelated lyric while echoing the query as metadata.
+      final providers = titleOnly
+          ? effectivePriority.where((p) => p == 'lrclib' || p == 'netease')
+          : effectivePriority;
+      for (final provider in providers) {
         futures.add(_safeFetch(() => fetchForProvider(provider, a, t, sid)));
       }
     }
@@ -633,8 +709,8 @@ class LyricsRemoteDataSource {
     // Variation 2: Cleaned/normalized text
     addForVariation(cleanArtist, cleanTitle);
     // Variation 3: Title only (helps for many songs)
-    addForVariation('', title);
-    if (cleanTitle != title) addForVariation('', cleanTitle);
+    addForVariation('', title, titleOnly: true);
+    if (cleanTitle != title) addForVariation('', cleanTitle, titleOnly: true);
 
     // LRCLIB search (fuzzy matching) — only if lrclib is in priority and enabled
     if (effectivePriority.contains('lrclib')) {
@@ -649,14 +725,23 @@ class LyricsRemoteDataSource {
         futures.add(
           _safeFetch(() async {
             final results = await searchLrclib(query);
-            LyricsModel? bestPlain;
             for (final r in results) {
-              if (r.isSynced && r.lrcLyrics != null && r.plainLyrics.isNotEmpty) {
+              // Search ordering is not a match signal.  Never let a fuzzy
+              // result replace the playing song unless its metadata agrees.
+              if (r.plainLyrics.isEmpty ||
+                  !_isGoodMatch(
+                    artist,
+                    title,
+                    r.artistName ?? '',
+                    r.trackName ?? '',
+                  )) {
+                continue;
+              }
+              if (r.isSynced && r.lrcLyrics != null) {
                 return r;
               }
-              bestPlain ??= (r.plainLyrics.isNotEmpty ? r : null);
             }
-            return bestPlain;
+            return null;
           }),
         );
       }
@@ -673,31 +758,66 @@ class LyricsRemoteDataSource {
     int providerIndexFor(LyricsModel m) {
       final src = m.source.toLowerCase();
       String id;
-      if (src.contains('lrclib')) id = 'lrclib';
-      else if (src.contains('textyl')) id = 'textyl';
-      else if (src.contains('chartlyrics')) id = 'chartlyrics';
-      else if (src.contains('lyrics.ovh') || src == 'lyrics.ovh') id = 'lyrics.ovh';
-      else if (src.contains('lyrist')) id = 'lyrist';
-      else if (src.contains('netease')) id = 'netease';
-      else id = src;
+      if (src.contains('lrclib'))
+        id = 'lrclib';
+      else if (src.contains('textyl'))
+        id = 'textyl';
+      else if (src.contains('chartlyrics'))
+        id = 'chartlyrics';
+      else if (src.contains('lyrics.ovh') || src == 'lyrics.ovh')
+        id = 'lyrics.ovh';
+      else if (src.contains('lyrist'))
+        id = 'lyrist';
+      else if (src.contains('netease'))
+        id = 'netease';
+      else
+        id = src;
       final idx = effectivePriority.indexOf(id);
       return idx == -1 ? 999 : idx;
     }
 
-    final valid = results.where((r) => r != null && r.plainLyrics.isNotEmpty).cast<LyricsModel>().toList();
+    final valid = results
+        .where(
+          (r) =>
+              r != null &&
+              r.plainLyrics.isNotEmpty &&
+              _isGoodMatch(
+                artist,
+                title,
+                r.artistName ?? '',
+                r.trackName ?? '',
+              ),
+        )
+        .cast<LyricsModel>()
+        .toList();
     if (valid.isEmpty) return null;
 
     valid.sort((a, b) {
-      // Synced first
-      if (a.isSynced != b.isSynced) return a.isSynced ? -1 : 1;
-      // Then by priority index
+      // Provider order is the primary decision. "Synced" only resolves a
+      // tie when the same provider returned more than one candidate.
       final ia = providerIndexFor(a);
       final ib = providerIndexFor(b);
       if (ia != ib) return ia.compareTo(ib);
+      if (a.isSynced != b.isSynced) return a.isSynced ? -1 : 1;
       return 0;
     });
 
-    return valid.first;
+    final selected = valid.first;
+    // Variations may have generated a different cache key.  Always cache a
+    // verified result under the actual playing song's key.
+    return LyricsModel(
+      id: selected.id,
+      songId: _generateSongId(artist, title),
+      plainLyrics: selected.plainLyrics,
+      lrcLyrics: selected.lrcLyrics,
+      isSynced: selected.isSynced,
+      source: selected.source,
+      fetchedAt: selected.fetchedAt,
+      artistName: selected.artistName,
+      trackName: selected.trackName,
+      albumName: selected.albumName,
+      isMatchVerified: true,
+    );
   }
 
   /// Wraps any fetch in try-catch so it never throws, just returns null
@@ -709,12 +829,102 @@ class LyricsRemoteDataSource {
     }
   }
 
-  /// Generate consistent song ID
+  /// Generate consistent song ID - preserves Unicode (Hindi, etc.) to avoid collisions
   String _generateSongId(String artist, String title) {
-    return '${artist}_$title'
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '_')
-        .replaceAll(RegExp(r'_+'), '_');
+    final raw = '${artist.trim()}_${title.trim()}'.toLowerCase().replaceAll(
+      RegExp(r'\s+'),
+      '_',
+    );
+    // Keep Unicode letters/numbers, replace other punctuation/symbols with _
+    // Uses Unicode property escapes to preserve Devanagari, etc.
+    try {
+      return raw
+          .replaceAll(RegExp(r'[^\p{L}\p{N}_]+', unicode: true), '_')
+          .replaceAll(RegExp(r'_+'), '_')
+          .replaceAll(RegExp(r'^_|_$'), '');
+    } catch (_) {
+      // Fallback if Unicode regex not supported
+      return raw
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_\u0900-\u097F\u4E00-\u9FFF]+'), '_')
+          .replaceAll(RegExp(r'_+'), '_')
+          .replaceAll(RegExp(r'^_|_$'), '');
+    }
+  }
+
+  /// Check if fetched result matches requested song (avoid random mismatched lyrics)
+  /// For Devanagari (Hindi) we are lenient due to transliteration variations, but still require title similarity
+  bool _isGoodMatch(
+    String reqArtist,
+    String reqTitle,
+    String resArtist,
+    String resTitle,
+  ) {
+    final reqA = reqArtist.toLowerCase().trim();
+    final reqT = reqTitle.toLowerCase().trim();
+    final resA = resArtist.toLowerCase().trim();
+    final resT = resTitle.toLowerCase().trim();
+    if (reqA.isEmpty || reqT.isEmpty) return true;
+    if (resA.isEmpty && resT.isEmpty) return false;
+    // Normalize for comparison: remove extra spaces, lower case, keep Unicode
+    String norm(String s) => s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final nReqA = norm(reqA);
+    final nReqT = norm(reqT);
+    final nResA = norm(resA);
+    final nResT = norm(resT);
+    // Exact match
+    if (nResA == nReqA && nResT == nReqT) return true;
+    // Contains check (handles "Artist - Topic" etc.)
+    bool artistOk = false;
+    if (nReqA.isNotEmpty && nResA.isNotEmpty) {
+      if (nResA.contains(nReqA) || nReqA.contains(nResA))
+        artistOk = true;
+      else {
+        final reqWords = nReqA
+            .split(RegExp(r'[,/&]+|\s+'))
+            .where((w) => w.length > 2)
+            .toSet();
+        final resWords = nResA
+            .split(RegExp(r'[,/&]+|\s+'))
+            .where((w) => w.length > 2)
+            .toSet();
+        final common = reqWords.intersection(resWords);
+        if (common.isNotEmpty) artistOk = true;
+      }
+    } else if (nReqA.isEmpty) {
+      artistOk = true; // Title-only search, artist not required
+    } else if (nResA.isEmpty) {
+      // Request has artist but result doesn't - can't verify, treat as not good for search results
+      artistOk = false;
+    } else {
+      artistOk = true;
+    }
+    bool titleOk = false;
+    if (nReqT.isNotEmpty && nResT.isNotEmpty) {
+      if (nResT == nReqT)
+        titleOk = true;
+      else if (nResT.contains(nReqT) || nReqT.contains(nResT))
+        titleOk = true;
+      else {
+        final reqWords = nReqT
+            .split(RegExp(r'\s+'))
+            .where((w) => w.length > 2)
+            .toSet();
+        final resWords = nResT
+            .split(RegExp(r'\s+'))
+            .where((w) => w.length > 2)
+            .toSet();
+        final common = reqWords.intersection(resWords);
+        if (common.isNotEmpty && common.length >= (reqWords.length / 2).ceil())
+          titleOk = true;
+      }
+    } else if (nReqT.isEmpty) {
+      titleOk = true;
+    } else if (nResT.isEmpty) {
+      titleOk = false;
+    } else {
+      titleOk = true;
+    }
+    return artistOk && titleOk;
   }
 
   /// Extract plain text from LRC format
@@ -736,21 +946,24 @@ class LyricsRemoteDataSource {
   }
 
   /// Search across all providers for lyrics using a free-form query
-  /// Improved robustness: handles single-string queries, normalizes, and uses
-  /// provider priority when ranking. No longer throws on transient network errors.
-  Future<List<LyricsModel>> searchByQuery(String query, {List<String>? providerPriority}) async {
+  /// V2: smarter, less spammy, cache-aware, handles single-word queries, debounced by caller.
+  /// Now limits parallel requests, prioritizes LRCLIB fuzzy search, and dedupes properly.
+  Future<List<LyricsModel>> searchByQuery(
+    String query, {
+    List<String>? providerPriority,
+  }) async {
     final q = query.trim();
     if (q.isEmpty) return [];
     final results = <LyricsModel>[];
-    // Deduplicate by songId+source to keep different provider variants
     final seen = <String>{};
-
     String dedupeKey(LyricsModel m) => '${m.source.toLowerCase()}|${m.songId}';
 
-    // Normalize the query
     final normalizedQuery = _normalizeText(q);
-
-    // Parse artist/title from query - support multiple separators
+    final isNonLatin = _containsNonLatin(q);
+    final hasDevanagari = RegExp(r'[\u0900-\u097F]').hasMatch(q);
+    final hasCJK = RegExp(
+      r'[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]',
+    ).hasMatch(q);
     String? guessedArtist;
     String? guessedTitle;
 
@@ -776,84 +989,141 @@ class LyricsRemoteDataSource {
         guessedArtist = parts[0].trim();
         guessedTitle = parts[1].trim();
       }
-    }
-
-    // If we couldn't parse, treat whole query as title and also try as combined
-    final effectivePriority = providerPriority ?? ApiConstants.apiPriority;
-
-    // Launch all searches in parallel for maximum speed
-    final futures = <Future<void>>[];
-
-    // 1. Always search LRCLIB with the query (most reliable) — unless user disabled lrclib
-    if (effectivePriority.contains('lrclib')) {
-      futures.add(_searchLrclibAndAddResultsSafe(q, results, seen, dedupeKey));
-      if (normalizedQuery != q && normalizedQuery.isNotEmpty) {
-        futures.add(_searchLrclibAndAddResultsSafe(normalizedQuery, results, seen, dedupeKey));
+    } else if (q.contains(':')) {
+      // Handle "Artist: Title" style
+      final parts = q.split(':');
+      if (parts.length == 2 &&
+          parts[0].trim().length >= 2 &&
+          parts[1].trim().length >= 2) {
+        guessedArtist = parts[0].trim();
+        guessedTitle = parts[1].trim();
       }
     }
 
-    // Helper to add fetches for a given artist/title pair across all enabled providers
-    void addFetchesFor(String a, String t) {
+    final effectivePriority = List<String>.from(
+      providerPriority ?? ApiConstants.apiPriority,
+    );
+    if (hasCJK && effectivePriority.contains('netease')) {
+      effectivePriority.remove('netease');
+      effectivePriority.insert(0, 'netease');
+    } else if (hasDevanagari && effectivePriority.contains('netease')) {
+      effectivePriority.remove('netease');
+      effectivePriority.add('netease');
+    } else if (isNonLatin && effectivePriority.contains('netease')) {
+      effectivePriority.remove('netease');
+      effectivePriority.insert(0, 'netease');
+    }
+
+    final futures = <Future<void>>[];
+
+    // 1. LRCLIB fuzzy search is the best signal - do it first and with normalized variant
+    if (effectivePriority.contains('lrclib')) {
+      futures.add(_searchLrclibAndAddResultsSafe(q, results, seen, dedupeKey));
+      if (normalizedQuery != q &&
+          normalizedQuery.isNotEmpty &&
+          normalizedQuery.length >= 2) {
+        futures.add(
+          _searchLrclibAndAddResultsSafe(
+            normalizedQuery,
+            results,
+            seen,
+            dedupeKey,
+          ),
+        );
+      }
+      // Also try stripped quotes variation
+      final stripped = q.replaceAll(RegExp(r'["' + r"'" + r'"]'), '').trim();
+      if (stripped != q && stripped.length >= 2) {
+        futures.add(
+          _searchLrclibAndAddResultsSafe(stripped, results, seen, dedupeKey),
+        );
+      }
+    }
+
+    void addFetchesFor(String a, String t, {bool limited = false}) {
       final sid = _generateSongId(a, t);
-      for (final provider in effectivePriority) {
+      // For title-only fallback, limit to top 3 providers to avoid spam
+      final providers = limited
+          ? effectivePriority.take(3).toList()
+          : effectivePriority;
+      for (final provider in providers) {
         switch (provider) {
           case 'textyl':
-            futures.add(_fetchAndAddTextyl(a, t, sid, results, seen, dedupeKey));
+            futures.add(
+              _fetchAndAddTextyl(a, t, sid, results, seen, dedupeKey),
+            );
             break;
           case 'lyrics.ovh':
-            futures.add(_fetchAndAddLyricsOvh(a, t, sid, results, seen, dedupeKey));
+            futures.add(
+              _fetchAndAddLyricsOvh(a, t, sid, results, seen, dedupeKey),
+            );
             break;
           case 'lyrist':
-            futures.add(_fetchAndAddLyrist(a, t, sid, results, seen, dedupeKey));
+            futures.add(
+              _fetchAndAddLyrist(a, t, sid, results, seen, dedupeKey),
+            );
             break;
           case 'chartlyrics':
-            futures.add(_fetchAndAddChartLyrics(a, t, sid, results, seen, dedupeKey));
+            futures.add(
+              _fetchAndAddChartLyrics(a, t, sid, results, seen, dedupeKey),
+            );
             break;
           case 'netease':
-            futures.add(_fetchAndAddNetEase(a, t, sid, results, seen, dedupeKey));
+            // Only hit netease for non-Latin or when we have explicit artist
+            if (isNonLatin || a.isNotEmpty) {
+              futures.add(
+                _fetchAndAddNetEase(a, t, sid, results, seen, dedupeKey),
+              );
+            }
             break;
           case 'lrclib':
-            // Direct lrclib get is already covered via fetchAllParallel logic, but add here too for parsed queries
-            futures.add(_fetchAndAddLrclib(a, t, sid, results, seen, dedupeKey));
+            futures.add(
+              _fetchAndAddLrclib(a, t, sid, results, seen, dedupeKey),
+            );
             break;
         }
       }
     }
 
-    // 2. If we have artist/title, search all providers in parallel with multiple variations
-    if (guessedArtist != null && guessedTitle != null && guessedArtist.isNotEmpty && guessedTitle.isNotEmpty) {
+    if (guessedArtist != null &&
+        guessedTitle != null &&
+        guessedArtist.isNotEmpty &&
+        guessedTitle.isNotEmpty) {
       addFetchesFor(guessedArtist, guessedTitle);
-
-      // Also try normalized versions
       final cleanArtist = _normalizeText(guessedArtist);
       final cleanTitle = _normalizeText(guessedTitle);
       if (cleanArtist != guessedArtist || cleanTitle != guessedTitle) {
         addFetchesFor(cleanArtist, cleanTitle);
       }
-      // Title-only fallback
-      addFetchesFor('', guessedTitle);
-      if (cleanTitle != guessedTitle) addFetchesFor('', cleanTitle);
+      // Title-only as fallback, but limited to avoid spamming all providers
+      addFetchesFor('', guessedTitle, limited: true);
     } else {
-      // No parseable artist/title: try query as title-only for each provider
-      // This helps when user types just song name like "Believer"
-      addFetchesFor('', q);
-      if (normalizedQuery != q) addFetchesFor('', normalizedQuery);
-      // Also try query as combined artist+title for providers that use q param (Textyl)
-      if (effectivePriority.contains('textyl')) {
+      // Single query: treat as free-form search
+      // Try as title-only on limited providers (fast)
+      addFetchesFor('', q, limited: true);
+      if (normalizedQuery != q && normalizedQuery.isNotEmpty) {
+        addFetchesFor('', normalizedQuery, limited: true);
+      }
+      // For Textyl which supports q param, also try as raw query (already covered but ensure)
+      if (effectivePriority.contains('textyl') && !q.contains(' ')) {
+        // Single word like "Believer" - textyl may need artist+title, but try anyway
         final sid = _generateSongId('', q);
         futures.add(_fetchAndAddTextyl('', q, sid, results, seen, dedupeKey));
       }
     }
 
-    // Wait for all parallel searches to complete (with timeout)
+    // Wait with shorter timeout - we want to return partial results quickly
     await Future.wait(
       futures.map(
-        (f) => f.timeout(const Duration(seconds: 10), onTimeout: () {}),
+        (f) => f.timeout(const Duration(seconds: 7), onTimeout: () {}),
       ),
-    );
+    ).timeout(const Duration(seconds: 9), onTimeout: () => <void>[]);
 
-    // Sort results: synced first, then by provider priority, then by plain length (longer = more complete)
-    results.sort((a, b) {
+    // Filter empties (extra safety) and sort
+    final filtered = results
+        .where((m) => m.plainLyrics.trim().isNotEmpty)
+        .toList();
+    filtered.sort((a, b) {
       if (a.isSynced != b.isSynced) return a.isSynced ? -1 : 1;
       String idFor(LyricsModel m) {
         final s = m.source.toLowerCase();
@@ -865,16 +1135,32 @@ class LyricsRemoteDataSource {
         if (s.contains('netease')) return 'netease';
         return s;
       }
+
       final ia = effectivePriority.indexOf(idFor(a));
       final ib = effectivePriority.indexOf(idFor(b));
       final pa = ia == -1 ? 999 : ia;
       final pb = ib == -1 ? 999 : ib;
       if (pa != pb) return pa.compareTo(pb);
-      // Longer lyrics often more complete
+      // Prefer longer (more complete) but also prefer where title/artist match query better
+      final aq = q.toLowerCase();
+      int score(LyricsModel m) {
+        int s = 0;
+        final tl = (m.trackName ?? '').toLowerCase();
+        final al = (m.artistName ?? '').toLowerCase();
+        if (tl.contains(aq) || aq.contains(tl)) s += 10;
+        if (al.contains(aq) || aq.contains(al)) s += 5;
+        if ((m.albumName ?? '').isNotEmpty) s += 1;
+        return s;
+      }
+
+      final sa = score(a), sb = score(b);
+      if (sa != sb) return sb.compareTo(sa);
       return b.plainLyrics.length.compareTo(a.plainLyrics.length);
     });
 
-    return results;
+    // Cap to top 20 to keep UI fast and avoid RAM bloat
+    if (filtered.length > 20) return filtered.sublist(0, 20);
+    return filtered;
   }
 
   Future<void> _searchLrclibAndAddResultsSafe(
@@ -902,7 +1188,12 @@ class LyricsRemoteDataSource {
     List<LyricsModel> results,
     Set<String> seenIds,
   ) async {
-    return _searchLrclibAndAddResultsSafe(query, results, seenIds, (m) => m.songId);
+    return _searchLrclibAndAddResultsSafe(
+      query,
+      results,
+      seenIds,
+      (m) => m.songId,
+    );
   }
 
   Future<void> _fetchAndAddTextyl(
@@ -1151,12 +1442,40 @@ class LyricsRemoteDataSource {
                           as String? ??
                       artist;
 
+                  // Strict verification: avoid returning random song for Hindi/Hinglish
+                  final isNonLatinReq = _containsNonLatin('$artist $title');
+                  final cleanReqArtist = _normalizeText(
+                    artist,
+                    isNonLatin: isNonLatinReq,
+                  );
+                  final cleanReqTitle = _normalizeText(
+                    title,
+                    isNonLatin: isNonLatinReq,
+                  );
+                  final matches =
+                      _isGoodMatch(artist, title, artistName, songName) ||
+                      _isGoodMatch(
+                        cleanReqArtist,
+                        cleanReqTitle,
+                        artistName,
+                        songName,
+                      );
+                  if (!matches) {
+                    // Wrong song, don't return random
+                    return null;
+                  }
+
+                  final isLrc = LrcParser.containsTimeTags(lyrics);
+                  final cleanPlain = isLrc
+                      ? LrcParser.toCleanPlainText(lyrics)
+                      : lyrics.trim();
+                  if (cleanPlain.isEmpty) return null;
                   return LyricsModel(
                     id: '${songId}_netease_$songNetEaseId',
                     songId: songId,
-                    plainLyrics: lyrics,
-                    lrcLyrics: null,
-                    isSynced: false,
+                    plainLyrics: cleanPlain,
+                    lrcLyrics: isLrc ? lyrics : null,
+                    isSynced: isLrc,
                     source: 'NetEase Music',
                     fetchedAt: DateTime.now(),
                     artistName: artistName,

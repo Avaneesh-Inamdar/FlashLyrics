@@ -175,4 +175,47 @@ class LrcParser {
   static String toPlainText(ParsedLrc lrc) {
     return lrc.lines.map((l) => l.text).join('\n');
   }
+
+  /// Strip all LRC timestamp tags from a line or block of text
+  /// e.g. "[00:12.34]Hello [00:15.00]world" -> "Hello world"
+  static String stripTimeTags(String text) {
+    if (text.isEmpty) return text;
+    // Remove all occurrences of [mm:ss.xx] or [mm:ss.xxx]
+    var cleaned = text.replaceAll(_timeTagPattern, '');
+    // Also remove metadata tags like [ti:...], [ar:...] etc. that may remain
+    cleaned = cleaned.replaceAll(_metaTagPattern, '');
+    // Remove any residual brackets that look like timestamps but with single digit
+    cleaned = cleaned.replaceAll(RegExp(r'\[\d{1,2}:\d{2}(\.\d{1,3})?\]'), '');
+    return cleaned.trim();
+  }
+
+  /// Strip timestamps from each line and return cleaned lines
+  static List<String> stripTimeTagsFromLines(List<String> lines) {
+    return lines.map((l) => stripTimeTags(l)).toList();
+  }
+
+  /// Detect if text likely contains LRC timestamps
+  static bool containsTimeTags(String text) {
+    return _timeTagPattern.hasMatch(text);
+  }
+
+  /// Convert any raw lyrics (possibly LRC) to clean plain text without timestamps
+  static String toCleanPlainText(String raw) {
+    if (!containsTimeTags(raw)) return raw;
+    final lines = raw.split('\n');
+    final cleaned = <String>[];
+    for (final line in lines) {
+      final stripped = stripTimeTags(line);
+      // Preserve empty lines as paragraph breaks but avoid adding empty due to pure timestamp lines
+      if (line.trim().isEmpty) {
+        cleaned.add('');
+      } else if (stripped.isEmpty) {
+        // Line was only timestamp/marker - skip
+        continue;
+      } else {
+        cleaned.add(stripped);
+      }
+    }
+    return cleaned.join('\n');
+  }
 }

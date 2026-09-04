@@ -9,6 +9,7 @@ import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/lyrics_image_generator.dart';
 import '../../domain/entities/lyrics.dart';
 import '../providers/lyrics_provider.dart';
+import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
 import 'synced_lyrics_display.dart';
 
@@ -36,6 +37,7 @@ class LyricsDisplay extends ConsumerStatefulWidget {
 class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   double _syncedFontSize = 22.0; // Default size for synced lyrics
   bool _showSizeSlider = false;
+  bool _isShareSelectionMode = false;
   int? _selectedStart;
   int? _selectedEnd;
   final ScrollController _plainLyricsScrollController = ScrollController();
@@ -71,6 +73,14 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     setState(() {
       _selectedStart = null;
       _selectedEnd = null;
+    });
+  }
+
+  void _exitShareMode() {
+    _clearSelection();
+    setState(() {
+      _isShareSelectionMode = false;
+      _currentLineIndexForScroll = null;
     });
   }
 
@@ -127,8 +137,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lyrics.id != widget.lyrics.id ||
         oldWidget.lyrics.plainLyrics != widget.lyrics.plainLyrics) {
-      _clearSelection();
-      _currentLineIndexForScroll = null;
+      _exitShareMode();
       _lineKeys = [];
     }
   }
@@ -136,15 +145,15 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    final showSyncedLyrics = settings.showSyncedLyrics;
+    final showSyncedLyrics =
+        settings.showSyncedLyrics && !_isShareSelectionMode;
 
     final hasSyncedLyrics =
         widget.lyrics.isSynced &&
         widget.lyrics.lrcLyrics != null &&
         LrcParser.isValidLrc(widget.lyrics.lrcLyrics!);
 
-    // Show synced lyrics when available AND setting is enabled
-    // Setting can be temporarily toggled off for line selection (share as image)
+    // Show synced lyrics when available AND setting is enabled AND not in share mode
     final useSyncedLyrics = hasSyncedLyrics && showSyncedLyrics;
 
     return Stack(
@@ -279,17 +288,11 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
                 runSpacing: 8,
                 children: [
                   // Show cancel button when in share mode (plain lyrics view with synced available)
-                  if (hasSyncedLyrics && !showSyncedLyrics)
+                  if (_isShareSelectionMode || (hasSyncedLyrics && !showSyncedLyrics))
                     _buildActionButton(
                       icon: Icons.close_rounded,
                       label: 'Cancel',
-                      onTap: () {
-                        _clearSelection();
-                        setState(() {
-                          _currentLineIndexForScroll = null;
-                        });
-                        ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
-                      },
+                      onTap: _exitShareMode,
                     ),
                   if (hasSyncedLyrics && showSyncedLyrics)
                     _buildActionButton(
@@ -514,6 +517,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       ),
       child: ListView.builder(
         controller: _plainLyricsScrollController,
+        cacheExtent: 5000,
         itemCount: lines.length,
         itemBuilder: (context, index) {
           final line = lines[index];
@@ -831,21 +835,13 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         Share.share(formattedLyrics);
       }
 
-      // Restore synced lyrics view and clear selection after sharing
+      // Clear selection and exit share mode after sharing
       if (!mounted) return;
-      _clearSelection();
-      setState(() {
-        _currentLineIndexForScroll = null;
-      });
-      ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
+      _exitShareMode();
     } catch (e) {
       // Restore state even on error
       if (mounted) {
-        _clearSelection();
-        setState(() {
-          _currentLineIndexForScroll = null;
-        });
-        ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
+        _exitShareMode();
       }
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
@@ -879,54 +875,47 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       return;
     }
 
-    // If we're in synced mode and have a playback position, jump to that line in plain view
-    if (showSyncedLyrics && widget.lyrics.lrcLyrics != null && widget.currentPosition != null) {
+    // Switch to local share selection mode without altering user's global settings
+    setState(() {
+      _isShareSelectionMode = true;
+    });
+
+    if (widget.lyrics.isSynced && widget.lyrics.lrcLyrics != null) {
       await _calculateCurrentLineIndex();
-    }
-
-    if (showSyncedLyrics) {
-      ref.read(settingsProvider.notifier).setShowSyncedLyrics(false);
-      
-      // Scroll precisely to the current playback line after view is built
       _scrollToCurrentLine();
-      
-      // Auto-restore synced lyrics after 30 seconds if user doesn't complete action
-      Future.delayed(const Duration(seconds: 30), () {
-        if (mounted && !_hasSelection) {
-          ref.read(settingsProvider.notifier).setShowSyncedLyrics(true);
-          setState(() {
-            _currentLineIndexForScroll = null;
-          });
-        }
-      });
     }
 
-    final posLabel = _formatDuration(widget.currentPosition);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_currentLineIndexForScroll != null
-            ? 'Scrolled to $posLabel — tap lines to select, share button to create image'
-            : 'Tap lines to select, long-press to share single line'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppTheme.surfaceLight,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    final pos = widget.currentPosition ?? ref.read(mediaNotifierProvider).currentPosition;
+    final posLabel = _formatDuration(pos);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_currentLineIndexForScroll != null
+              ? 'Scrolled to $posLabel — tap lines to select, share button to create image'
+              : 'Tap lines to select, long-press to share single line'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.surfaceLight,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
   
   Future<void> _calculateCurrentLineIndex() async {
-    if (widget.lyrics.lrcLyrics == null || widget.currentPosition == null) return;
+    final lrc = widget.lyrics.lrcLyrics;
+    final pos = widget.currentPosition ?? ref.read(mediaNotifierProvider).currentPosition;
+    if (lrc == null || pos == Duration.zero) return;
     
     try {
-      final parsedLrc = await LrcParser.parse(widget.lyrics.lrcLyrics!);
+      final parsedLrc = await LrcParser.parse(lrc);
       if (!mounted) return;
       
       // Replicate synced display's lead time (800ms + user offset) to find the
-      // same line the user currently sees highlighted at `currentPosition`
+      // same line the user currently sees highlighted at playback position
       final settings = ref.read(settingsProvider);
       final lead = const Duration(milliseconds: 800) + Duration(milliseconds: settings.lyricsSyncOffset);
-      final adjusted = widget.currentPosition! + lead;
+      final adjusted = pos + lead;
       final currentIndex = parsedLrc.getLineIndexAtTime(adjusted);
       if (currentIndex < 0 || currentIndex >= parsedLrc.lines.length) return;
 
@@ -935,12 +924,26 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       int plainIndex = -1;
 
       if (currentText.isNotEmpty) {
-        // Try exact match first
+        // 1. Exact match (trimmed)
         plainIndex = plainLines.indexWhere((l) => l.trim() == currentText);
-        // Fallback: case-insensitive contains
+        // 2. Case-insensitive exact match
+        if (plainIndex == -1) {
+          plainIndex = plainLines.indexWhere((l) => l.trim().toLowerCase() == currentText.toLowerCase());
+        }
+        // 3. Substring match
         if (plainIndex == -1) {
           final lower = currentText.toLowerCase();
           plainIndex = plainLines.indexWhere((l) => l.trim().toLowerCase().contains(lower) || lower.contains(l.trim().toLowerCase()));
+        }
+        // 4. Normalized match (ignoring punctuation)
+        if (plainIndex == -1) {
+          final normCurrent = currentText.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
+          if (normCurrent.isNotEmpty) {
+            plainIndex = plainLines.indexWhere((l) {
+              final normL = l.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
+              return normL == normCurrent || normL.contains(normCurrent) || normCurrent.contains(normL);
+            });
+          }
         }
       }
 
@@ -954,7 +957,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         if (plainIndex + offset < plainLines.length) plainIndex += offset;
       }
 
-      if (plainIndex >= 0) {
+      if (plainIndex >= 0 && mounted) {
         setState(() {
           _currentLineIndexForScroll = plainIndex;
           // Auto-select the current line so user sees it and can immediately share or extend
@@ -985,9 +988,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
           try {
             await Scrollable.ensureVisible(
               ctx,
-              duration: const Duration(milliseconds: 550),
+              duration: const Duration(milliseconds: 450),
               curve: Curves.easeOutCubic,
-              alignment: 0.3, // Show target near top third, with context above/below
+              alignment: 0.35, // Show target near top third, with context above/below
             );
             return;
           } catch (_) {
@@ -996,10 +999,10 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         }
         // Fallback: offset-based scroll if GlobalKey not yet attached
         if (!_plainLyricsScrollController.hasClients) return;
-        // Estimate 56px per line (padding + text)
-        const est = 56.0;
+        // Estimate 48px per line (padding + text)
+        const est = 48.0;
         final offset = (target * est - 100).clamp(0.0, _plainLyricsScrollController.position.maxScrollExtent);
-        _plainLyricsScrollController.animateTo(offset, duration: const Duration(milliseconds: 500), curve: Curves.easeOutCubic);
+        _plainLyricsScrollController.animateTo(offset, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
       });
     });
   }

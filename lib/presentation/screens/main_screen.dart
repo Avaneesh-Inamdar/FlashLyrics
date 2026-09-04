@@ -1,6 +1,4 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../providers/providers.dart';
@@ -8,6 +6,8 @@ import 'home_screen.dart';
 import 'library_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
+
+import '../widgets/ad_banner_widget.dart';
 
 /// Main navigation screen with custom bottom navigation bar
 class MainScreen extends ConsumerStatefulWidget {
@@ -33,7 +33,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     return Scaffold(
       extendBody: true,
       body: IndexedStack(index: currentIndex, children: _screens),
-      bottomNavigationBar: _buildBottomNavigationBar(isDark, currentIndex),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AdBannerWidget(),
+          _buildBottomNavigationBar(isDark, currentIndex),
+        ],
+      ),
     );
   }
 
@@ -43,82 +49,61 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         ? AppTheme.surfaceLight
         : AppTheme.lightSurfaceLight;
     final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
-    
+
     // Get bottom padding to account for system navigation bar (3-button nav)
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final bottomMargin = (bottomPadding > 0 ? bottomPadding + 8 : 24.0);
 
-    return Container(
-      margin: EdgeInsets.fromLTRB(20, 0, 20, bottomMargin),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            height: 72,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  surfaceColor.withValues(alpha: 0.85),
-                  surfaceLight.withValues(alpha: 0.75),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: surfaceLight.withValues(alpha: 0.5),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+    return RepaintBoundary(
+      child: Container(
+        margin: EdgeInsets.fromLTRB(20, 0, 20, bottomMargin),
+        height: 62,
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: surfaceLight, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(
-                  index: 0,
-                  icon: Icons.home_rounded,
-                  label: 'Home',
-                  textHint: textHint,
-                  currentIndex: currentIndex,
-                ),
-                _buildNavItem(
-                  index: 1,
-                  icon: Icons.search_rounded,
-                  label: 'Search',
-                  textHint: textHint,
-                  currentIndex: currentIndex,
-                ),
-                _buildNavItem(
-                  index: 2,
-                  icon: Icons.library_music_rounded,
-                  label: 'Library',
-                  textHint: textHint,
-                  currentIndex: currentIndex,
-                ),
-                _buildNavItem(
-                  index: 3,
-                  icon: Icons.settings_rounded,
-                  label: 'Settings',
-                  textHint: textHint,
-                  currentIndex: currentIndex,
-                ),
-              ],
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(
+              index: 0,
+              icon: Icons.home_rounded,
+              label: 'Home',
+              textHint: textHint,
+              currentIndex: currentIndex,
             ),
-          ),
+            _buildNavItem(
+              index: 1,
+              icon: Icons.search_rounded,
+              label: 'Search',
+              textHint: textHint,
+              currentIndex: currentIndex,
+            ),
+            _buildNavItem(
+              index: 2,
+              icon: Icons.library_music_rounded,
+              label: 'Library',
+              textHint: textHint,
+              currentIndex: currentIndex,
+            ),
+            _buildNavItem(
+              index: 3,
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              textHint: textHint,
+              currentIndex: currentIndex,
+            ),
+          ],
         ),
       ),
-    ).animate().slideY(
-      begin: 1,
-      end: 0,
-      duration: 400.ms,
-      curve: Curves.easeOutCubic,
     );
   }
 
@@ -141,45 +126,31 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 20 : 16,
-          vertical: 10,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          gradient: isSelected ? AppTheme.primaryGradient : null,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
+          color: isSelected
+              ? AppTheme.primaryColor.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: isSelected ? Colors.white : textHint),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              child: isSelected
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+            Icon(
+              icon,
+              size: 21,
+              color: isSelected ? AppTheme.primaryColor : textHint,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppTheme.primaryColor : textHint,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 10,
+              ),
             ),
           ],
         ),

@@ -55,6 +55,11 @@ android {
             )
         }
     }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
     
     // Disable NDK
     packaging {

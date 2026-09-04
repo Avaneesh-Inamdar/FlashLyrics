@@ -14,7 +14,8 @@ class SyncedLyricsDisplay extends StatefulWidget {
   final ValueChanged<Duration>? onSeek;
   final double fontSize;
   final int syncOffsetMs; // User-configurable sync offset in milliseconds
-  final ValueChanged<int>? onOffsetChanged; // Callback for quick offset adjustment
+  final ValueChanged<int>?
+  onOffsetChanged; // Callback for quick offset adjustment
 
   const SyncedLyricsDisplay({
     super.key,
@@ -41,7 +42,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
   // Track playback state for resuming scroll after theme change
   bool _wasPlaying = false;
-  
+
   // Quick offset adjuster state
   bool _showQuickAdjuster = false;
 
@@ -123,13 +124,14 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
       return;
 
     try {
-      // Calculate target offset to center the current line
+      // Calculate the target offset for the visual focus point.
       final viewportHeight = _scrollController.position.viewportDimension;
-      final centerOffset = viewportHeight / 2 - _itemHeight / 2;
+      final focusOffset = viewportHeight * 0.44 - _itemHeight / 2;
 
-      // Target offset puts current line in the center
+      // Target offset puts the current line at the same reading position
+      // used for the list's top/bottom padding.
       final targetOffset =
-          (_currentLineIndex * _itemHeight) + _viewportPadding - centerOffset;
+          (_currentLineIndex * _itemHeight) + _viewportPadding - focusOffset;
 
       final clampedOffset = targetOffset.clamp(
         0.0,
@@ -209,8 +211,11 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
             ? AppTheme.surfaceColor
             : AppTheme.lightSurface;
 
-        final centerPad = (constraints.maxHeight / 2) - (_itemHeight / 2);
-        _viewportPadding = centerPad.clamp(80.0, 220.0);
+        // Keep the active line slightly above geometric center. This reads
+        // more naturally with the title/actions above the lyric panel and
+        // leaves room to preview the upcoming line below it.
+        final focusOffset = (constraints.maxHeight * 0.44) - (_itemHeight / 2);
+        _viewportPadding = focusOffset.clamp(80.0, 220.0);
 
         return Stack(
           children: [
@@ -225,7 +230,8 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
                 addAutomaticKeepAlives: false,
                 itemCount: _parsedLrc!.lines.length,
                 itemExtent: _itemHeight,
-                itemBuilder: (context, index) => RepaintBoundary(child: _buildLyricLine(index, isDark)),
+                itemBuilder: (context, index) =>
+                    RepaintBoundary(child: _buildLyricLine(index, isDark)),
               ),
             ),
             // Simple top fade effect
@@ -291,8 +297,11 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: (isDark ? AppTheme.surfaceColor : AppTheme.lightSurface)
-                              .withValues(alpha: 0.9),
+                          color:
+                              (isDark
+                                      ? AppTheme.surfaceColor
+                                      : AppTheme.lightSurface)
+                                  .withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: AppTheme.primaryColor.withValues(alpha: 0.3),

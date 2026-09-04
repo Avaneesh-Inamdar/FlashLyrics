@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/providers.dart';
@@ -12,9 +13,14 @@ import 'presentation/screens/main_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize Google Mobile Ads asynchronously
+  MobileAds.instance.initialize();
+
+  // Optimize image cache for RAM (limit to 50 images, 20MB)
+  PaintingBinding.instance.imageCache.maximumSize = 50;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 20 << 20;
+
   // Enable high-refresh-rate input resampling and vsync for 90/120Hz displays
-  // This ensures gestures and animations run at the display's native refresh rate
-  // instead of being clamped to 60Hz.
   GestureBinding.instance.resamplingEnabled = true;
 
   // Set preferred orientations
@@ -66,30 +72,28 @@ class _FlashLyricsAppState extends ConsumerState<FlashLyricsApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-
-    // Handle app lifecycle to prevent freezing when screen is off
     switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
-        // App is in background or being paused - reduce activity
-        if (kDebugMode) {
-          debugPrint('App lifecycle: paused/inactive');
-        }
+      case AppLifecycleState.hidden:
+        if (kDebugMode) debugPrint('App lifecycle: paused/inactive/hidden - reducing polling');
+        // Reduce polling frequency when backgrounded to save RAM/battery, but keep detection alive
+        try {
+          ref.read(mediaDetectionServiceProvider).setBackgroundMode(true);
+        } catch (_) {}
         break;
       case AppLifecycleState.resumed:
-        // App is back to foreground - resume normal activity
-        if (kDebugMode) {
-          debugPrint('App lifecycle: resumed');
-        }
-        // Refresh media detection when app resumes
+        if (kDebugMode) debugPrint('App lifecycle: resumed');
+        try {
+          ref.read(mediaDetectionServiceProvider).setBackgroundMode(false);
+        } catch (_) {}
         _refreshMediaDetection();
         break;
       case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
-        // App is being terminated or hidden - cleanup
-        if (kDebugMode) {
-          debugPrint('App lifecycle: detached/hidden');
-        }
+        if (kDebugMode) debugPrint('App lifecycle: detached');
+        try {
+          ref.read(mediaDetectionServiceProvider).setBackgroundMode(true);
+        } catch (_) {}
         break;
     }
   }

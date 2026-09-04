@@ -18,6 +18,8 @@ class MediaDetectionService {
   Timer? _pollTimer;
   Timer? _healthCheckTimer; // Add health check timer to detect killed service
   bool _isListening = false;
+  bool _isBackground = false;
+  Duration _pollInterval = const Duration(milliseconds: 500);
 
   // Track when we last successfully got a song
   DateTime? _lastSuccessfulSongDetection;
@@ -136,7 +138,14 @@ class MediaDetectionService {
         return null;
       }
 
-      final id = '${artist}_$title'.toLowerCase().replaceAll(' ', '_');
+      final rawId = '${artist.trim()}_${title.trim()}'.toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+      String id;
+      try {
+        id = rawId.replaceAll(RegExp(r'[^\p{L}\p{N}_]+', unicode: true), '_').replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+      } catch (_) {
+        id = rawId.replaceAll(RegExp(r'[^a-zA-Z0-9_\u0900-\u097F\u4E00-\u9FFF]+'), '_').replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+      }
+      if (id.isEmpty) id = '${artist}_$title'.hashCode.toString();
       final song = SongModel(
         id: id,
         title: title,
@@ -269,12 +278,22 @@ class MediaDetectionService {
     }
   }
 
+  /// Called from app lifecycle to reduce RAM/battery when in background
+  void setBackgroundMode(bool isBackground) {
+    if (_isBackground == isBackground) return;
+    _isBackground = isBackground;
+    _pollInterval = isBackground ? const Duration(milliseconds: 2000) : const Duration(milliseconds: 500);
+    if (_isListening) {
+      if (kDebugMode) debugPrint('📡 Poll interval changed to ${_pollInterval.inMilliseconds}ms (bg=$isBackground)');
+      _startPolling();
+    }
+  }
+
   void _startPolling() {
     _pollTimer?.cancel();
-    if (kDebugMode) debugPrint('📡 POLLING: Started (every 500ms)');
+    if (kDebugMode) debugPrint('📡 POLLING: Started (every ${_pollInterval.inMilliseconds}ms)');
     int pollCount = 0;
-    // Reduced polling interval from 1s to 500ms for faster detection
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 500), (_) async {
+    _pollTimer = Timer.periodic(_pollInterval, (_) async {
       if (!_isListening) return;
       try {
         final song = await getCurrentPlayingSong();
@@ -407,8 +426,14 @@ class MediaDetectionService {
       return;
     }
 
-    // Create unique ID from title and artist
-    final id = '${artist}_$title'.toLowerCase().replaceAll(' ', '_');
+    final rawId2 = '${artist.trim()}_${title.trim()}'.toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    String id;
+    try {
+      id = rawId2.replaceAll(RegExp(r'[^\p{L}\p{N}_]+', unicode: true), '_').replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+    } catch (_) {
+      id = rawId2.replaceAll(RegExp(r'[^a-zA-Z0-9_\u0900-\u097F\u4E00-\u9FFF]+'), '_').replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+    }
+    if (id.isEmpty) id = '${artist}_$title'.hashCode.toString();
 
     final song = SongModel(
       id: id,
@@ -535,6 +560,121 @@ class MediaDetectionService {
       return false;
     }
   }
+
+  /// Skip to next track (works with any media app via MediaSession)
+  Future<bool> skipToNext() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('skipToNext');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error skipToNext: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Skip to previous track
+  Future<bool> skipToPrevious() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('skipToPrevious');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error skipToPrevious: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Show floating lyrics overlay (requires SYSTEM_ALERT_WINDOW)
+  /// Now supports realtime synced lyrics via lrcLyrics + syncOffsetMs (native auto-sync)
+  /// When [enableSeek] is true the overlay becomes scrollable and tap-to-seek is enabled.
+  Future<bool> showOverlay({
+    required String title,
+    required String artist,
+    required String lyrics,
+    String currentLine = '',
+    String lrcLyrics = '',
+    int syncOffsetMs = 0,
+    bool enableSeek = false,
+  }) async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('showOverlay', {
+        'title': title,
+        'artist': artist,
+        'lyrics': lyrics,
+        'currentLine': currentLine,
+        'lrcLyrics': lrcLyrics,
+        'syncOffsetMs': syncOffsetMs,
+        'enableSeek': enableSeek,
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error showOverlay: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Hide floating overlay
+  Future<bool> hideOverlay() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('hideOverlay');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error hideOverlay: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Update overlay with current/next lyric line
+  Future<bool> updateOverlayLyrics(String currentLine, String nextLine) async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('updateOverlayLyrics', {
+        'currentLine': currentLine,
+        'nextLine': nextLine,
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error updateOverlay: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Enter Picture-in-Picture mode
+  Future<bool> enterPipMode() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('enterPipMode');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      if (kDebugMode) debugPrint('Error PIP: ${e.message}');
+      return false;
+    }
+  }
+
+  static Future<bool> checkPostNotificationPermission() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('checkPostNotificationPermission');
+      return result ?? true;
+    } catch (_) { return true; }
+  }
+
+  static Future<void> requestPostNotificationPermission() async {
+    try { await _methodChannel.invokeMethod('requestPostNotificationPermission'); } catch (_) {}
+  }
+
+  static Future<bool> cacheOverlayLyricsStatic({required String title, required String artist, String lrcLyrics = '', String plainLyrics = '', int syncOffsetMs = 0, bool enableSeek = false}) async {
+    try {
+      final r = await _methodChannel.invokeMethod<bool>('cacheOverlayLyrics', {
+        'title': title,
+        'artist': artist,
+        'lrcLyrics': lrcLyrics,
+        'plainLyrics': plainLyrics,
+        'syncOffsetMs': syncOffsetMs,
+        'enableSeek': enableSeek,
+      });
+      return r ?? false;
+    } catch (_) { return false; }
+  }
+
+  Future<bool> cacheOverlayLyrics({required String title, required String artist, String lrcLyrics = '', String plainLyrics = '', int syncOffsetMs = 0, bool enableSeek = false}) =>
+      cacheOverlayLyricsStatic(title: title, artist: artist, lrcLyrics: lrcLyrics, plainLyrics: plainLyrics, syncOffsetMs: syncOffsetMs, enableSeek: enableSeek);
 }
 
 /// Represents the current playback position with metadata

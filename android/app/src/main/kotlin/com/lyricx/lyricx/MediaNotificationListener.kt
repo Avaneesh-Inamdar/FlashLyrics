@@ -1,19 +1,26 @@
 package com.lyricx.lyricx
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -126,7 +133,12 @@ class MediaNotificationListener : NotificationListenerService() {
             private set
 
         // Position update interval in milliseconds
-        private const val POSITION_UPDATE_INTERVAL = 150L
+        private const val POSITION_UPDATE_INTERVAL = 300L
+
+        // Notification for music detection (battery-efficient, only when music playing)
+        private const val MUSIC_NOTIF_ID = 2002
+        private const val MUSIC_CHANNEL_ID = "flashlyrics_now_playing"
+        private var lastNotifiedSongForNotif: String? = null
 
         // Get the current song as a map for Flutter
         fun getCurrentSong(): Map<String, Any?>? {
@@ -187,6 +199,24 @@ class MediaNotificationListener : NotificationListenerService() {
         serviceInstance = this
         Log.d(TAG, "MediaNotificationListener created")
         initializeMediaSessionManager()
+        createMusicNotificationChannel()
+    }
+
+    private fun createMusicNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                MUSIC_CHANNEL_ID,
+                "Now Playing",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Shows when music is detected — tap to view lyrics"
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
+        }
     }
     
     override fun onDestroy() {
@@ -424,11 +454,13 @@ class MediaNotificationListener : NotificationListenerService() {
         val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM)
         val duration = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION)
         
-        // Get album art URI or bitmap if available
+        // Get album art URI or bitmap if available - comprehensive key fallback for older Android
         var artworkUri = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
             ?: metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)
-        val artworkBitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-            ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: try { metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI) } catch (_: Exception) { null }
+        var artworkBitmap = try { metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) } catch (_: Exception) { null }
+            ?: try { metadata.getBitmap(MediaMetadata.METADATA_KEY_ART) } catch (_: Exception) { null }
+            ?: try { metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) } catch (_: Exception) { null }
         
         // Get current position from playback state
         val position = playbackState?.position ?: 0L
@@ -439,23 +471,28 @@ class MediaNotificationListener : NotificationListenerService() {
         }
 
         if (!artworkUri.isNullOrEmpty() && artworkUri.startsWith("content://")) {
-            artworkUri = cacheArtworkUri(artworkUri, title, artist) ?: artworkUri
+            val cached = cacheArtworkUri(artworkUri, title, artist)
+            if (cached != null) artworkUri = cached
+            // leave original content:// if caching fails; Dart placeholder will show and fallback to iTunes
         }
 
-        if (artworkUri.isNullOrEmpty() && artworkBitmap != null) {
-            artworkUri = cacheArtworkBitmap(artworkBitmap, title, artist)
+        if ((artworkUri.isNullOrEmpty() || artworkUri.startsWith("content://")) && artworkBitmap != null) {
+            val cachedBmp = cacheArtworkBitmap(artworkBitmap, title, artist)
+            if (cachedBmp != null) artworkUri = cachedBmp
         }
         
-        // Debounce - only skip if exact same notification (include position range to avoid spam)
-        // Include isPlaying so we notify when playback state changes
+        // Get friendly source name early for notification
+        val source = getSourceName(packageName)
+
+        // Debounce - only skip Flutter callback if exact same notification
         val songKey = "$title|$artist"
         val isSameSong = songKey == lastNotifiedSong
-        
-        // For same song, only notify if playback state changed or it's a fresh app connection
-        // Always notify if forceNextNotification is set (happens when Flutter reconnects)
+
+        // Always ensure notification is shown for music services even when debounced for Flutter
+        // (battery-efficient but visible)
         if (isSameSong && isPlaying == currentIsPlaying && mediaUpdateListener != null && !forceNextNotification) {
-            // Same song, same playback state, skip to avoid spam
-            // But still start position tracking if playing
+            // Still show/update notification for same song (strict music only)
+            showMusicNotification(title, artist, source, isPlaying, packageName)
             if (isPlaying) {
                 startPositionTracking(controller)
             }
@@ -466,9 +503,8 @@ class MediaNotificationListener : NotificationListenerService() {
         forceNextNotification = false
         lastNotifiedSong = songKey
         
-        // Get friendly source name
-        val source = getSourceName(packageName)
-        
+        val songChanged = (currentTitle != title || currentArtist != artist)
+
         // Store current song data for retrieval on app restart
         currentTitle = title
         currentArtist = artist
@@ -488,9 +524,16 @@ class MediaNotificationListener : NotificationListenerService() {
         }
         
         Log.d(TAG, "Notifying: $title by $artist from $source (playing: $isPlaying, pos: ${position}ms)")
+        // Battery-efficient notification only for strict music package + playing
+        showMusicNotification(title, artist, source, isPlaying, packageName)
         mediaUpdateListener?.onMediaUpdate(
             title, artist, album, artworkUri, duration, source, isPlaying, position
         )
+
+        // If floating overlay is showing and song changed, immediately trigger skeleton transition
+        if (songChanged && LyricsOverlayService.isOverlayShowing) {
+            LyricsOverlayService.onSongChanged(title, artist)
+        }
     }
 
     private fun cacheArtworkBitmap(bitmap: Bitmap, title: String, artist: String): String? {
@@ -499,13 +542,27 @@ class MediaNotificationListener : NotificationListenerService() {
                 .lowercase()
                 .replace(Regex("[^a-z0-9_]+"), "_")
                 .trim('_')
-            val file = File(cacheDir, "art_$safeName.png")
-            FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+                .take(64)
+            val file = File(cacheDir, "art_${safeName}.png")
+            var bmpToSave = bitmap
+            val maxDim = 700
+            if (bitmap.width > maxDim || bitmap.height > maxDim) {
+                val ratio = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height)
+                val newW = (bitmap.width * ratio).toInt()
+                val newH = (bitmap.height * ratio).toInt()
+                bmpToSave = Bitmap.createScaledBitmap(bitmap, newW, newH, true)
             }
-            file.toURI().toString()
+            if (file.exists()) file.delete()
+            FileOutputStream(file).use { out ->
+                bmpToSave.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            }
+            if (bmpToSave != bitmap) bmpToSave.recycle()
+            "file://${file.absolutePath}"
         } catch (e: IOException) {
             Log.e(TAG, "Failed to cache album art bitmap", e)
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cache album art bitmap (generic)", e)
             null
         }
     }
@@ -516,16 +573,18 @@ class MediaNotificationListener : NotificationListenerService() {
                 .lowercase()
                 .replace(Regex("[^a-z0-9_]+"), "_")
                 .trim('_')
+                .take(64)
             val uri = Uri.parse(uriString)
             val input = contentResolver.openInputStream(uri) ?: return null
-            val file = File(cacheDir, "art_${safeName}_uri.png")
+            val file = File(cacheDir, "art_${safeName}_uri.jpg")
+            if (file.exists()) file.delete()
             FileOutputStream(file).use { out ->
                 input.copyTo(out)
             }
-            input.close()
-            file.toURI().toString()
+            try { input.close() } catch (_: Exception) {}
+            "file://${file.absolutePath}"
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to cache album art uri", e)
+            Log.e(TAG, "Failed to cache album art uri: $uriString", e)
             null
         }
     }
@@ -571,6 +630,23 @@ class MediaNotificationListener : NotificationListenerService() {
             
             else -> "Media Player"
         }
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= 33) {
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else true
+    }
+
+    private fun showMusicNotification(title: String, artist: String, source: String, isPlaying: Boolean, packageName: String) {
+        if (!SUPPORTED_PACKAGES.contains(packageName) && !isMediaApp(packageName)) {
+            return
+        }
+        MusicNotificationManager.showMusicNotification(this, title, artist, source, isPlaying, packageName)
+    }
+
+    private fun cancelMusicNotification() {
+        MusicNotificationManager.cancelMusicNotification(this)
     }
     
     private fun cleanupControllers() {

@@ -12,16 +12,22 @@ class AppSettings {
   final bool autoRefresh;
   final bool showSyncedLyrics;
   final bool keepScreenOn;
+  final bool floatingLyricsEnabled; // Enable floating overlay/PIP
+  final bool floatingOverlaySeekEnabled; // Allow scrolling & tap-to-seek in overlay
   final ThemeModeOption themeMode;
   final List<String> providerPriority;
   final String accentColor;
   final int lyricsSyncOffset; // Offset in milliseconds for lyrics sync
+  final bool enableAds; // Toggle Google Mobile Ads (AdMob)
 
   const AppSettings({
     this.fontSize = 18.0,
     this.autoRefresh = true,
     this.showSyncedLyrics = true,
     this.keepScreenOn = false,
+    this.floatingLyricsEnabled = false,
+    this.floatingOverlaySeekEnabled = false,
+    this.enableAds = true,
     this.themeMode = ThemeModeOption.auto,
     this.accentColor = 'emerald',
     this.lyricsSyncOffset = 0,
@@ -71,6 +77,9 @@ class AppSettings {
     bool? autoRefresh,
     bool? showSyncedLyrics,
     bool? keepScreenOn,
+    bool? floatingLyricsEnabled,
+    bool? floatingOverlaySeekEnabled,
+    bool? enableAds,
     ThemeModeOption? themeMode,
     List<String>? providerPriority,
     String? accentColor,
@@ -81,6 +90,9 @@ class AppSettings {
       autoRefresh: autoRefresh ?? this.autoRefresh,
       showSyncedLyrics: showSyncedLyrics ?? this.showSyncedLyrics,
       keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+      floatingLyricsEnabled: floatingLyricsEnabled ?? this.floatingLyricsEnabled,
+      floatingOverlaySeekEnabled: floatingOverlaySeekEnabled ?? this.floatingOverlaySeekEnabled,
+      enableAds: enableAds ?? this.enableAds,
       themeMode: themeMode ?? this.themeMode,
       accentColor: accentColor ?? this.accentColor,
       lyricsSyncOffset: lyricsSyncOffset ?? this.lyricsSyncOffset,
@@ -93,6 +105,9 @@ class AppSettings {
     'autoRefresh': autoRefresh,
     'showSyncedLyrics': showSyncedLyrics,
     'keepScreenOn': keepScreenOn,
+    'floatingLyricsEnabled': floatingLyricsEnabled,
+    'floatingOverlaySeekEnabled': floatingOverlaySeekEnabled,
+    'enableAds': enableAds,
     'themeMode': themeMode.name,
     'accentColor': accentColor,
     'lyricsSyncOffset': lyricsSyncOffset,
@@ -120,6 +135,9 @@ class AppSettings {
       autoRefresh: json['autoRefresh'] as bool? ?? true,
       showSyncedLyrics: json['showSyncedLyrics'] as bool? ?? true,
       keepScreenOn: json['keepScreenOn'] as bool? ?? false,
+      floatingLyricsEnabled: json['floatingLyricsEnabled'] as bool? ?? false,
+      floatingOverlaySeekEnabled: json['floatingOverlaySeekEnabled'] as bool? ?? false,
+      enableAds: json['enableAds'] as bool? ?? true,
       themeMode: parseThemeMode(json['themeMode']),
       accentColor: json['accentColor'] as String? ?? 'emerald',
       lyricsSyncOffset: json['lyricsSyncOffset'] as int? ?? 0,
@@ -198,6 +216,21 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setKeepScreenOn(bool value) {
     state = state.copyWith(keepScreenOn: value);
+    _saveSettings();
+  }
+
+  void setFloatingLyricsEnabled(bool value) {
+    state = state.copyWith(floatingLyricsEnabled: value);
+    _saveSettings();
+  }
+
+  void setFloatingOverlaySeekEnabled(bool value) {
+    state = state.copyWith(floatingOverlaySeekEnabled: value);
+    _saveSettings();
+  }
+
+  void setEnableAds(bool value) {
+    state = state.copyWith(enableAds: value);
     _saveSettings();
   }
 

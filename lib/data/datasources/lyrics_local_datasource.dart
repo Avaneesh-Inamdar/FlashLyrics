@@ -26,7 +26,7 @@ class LyricsLocalDataSource {
     return null;
   }
 
-  /// Save lyrics to cache
+  /// Save lyrics to cache with LRU eviction (max ~3MB / 100 entries)
   Future<void> cacheLyrics(LyricsModel lyrics) async {
     final cachedData = _prefs.getString(_lyricsCacheKey);
     Map<String, dynamic> cache = {};
@@ -39,9 +39,24 @@ class LyricsLocalDataSource {
       }
     }
 
-    // Store with songId as key
+    // LRU: move existing to end (newest)
+    cache.remove(lyrics.songId);
     cache[lyrics.songId] = lyrics.toJson();
-    await _prefs.setString(_lyricsCacheKey, jsonEncode(cache));
+
+    // Enforce limits: max 100 entries, max ~3MB
+    const maxEntries = 100;
+    const maxBytes = 3 * 1024 * 1024;
+    // Evict oldest if over entry limit
+    while (cache.length > maxEntries) {
+      cache.remove(cache.keys.first);
+    }
+    // Evict until under byte limit
+    String encoded = jsonEncode(cache);
+    while (encoded.length > maxBytes && cache.length > 20) {
+      cache.remove(cache.keys.first);
+      encoded = jsonEncode(cache);
+    }
+    await _prefs.setString(_lyricsCacheKey, encoded);
   }
 
   /// Get all cached lyrics
@@ -73,14 +88,16 @@ class LyricsLocalDataSource {
     }
   }
 
-  /// Search through cached lyrics
+  /// Search through cached lyrics (now includes track/artist names)
   List<LyricsModel> searchCachedLyrics(String query) {
     final allLyrics = getAllCachedLyrics();
     final lowerQuery = query.toLowerCase();
-
     return allLyrics.where((lyrics) {
       return lyrics.plainLyrics.toLowerCase().contains(lowerQuery) ||
-          lyrics.songId.toLowerCase().contains(lowerQuery);
+          lyrics.songId.toLowerCase().contains(lowerQuery) ||
+          (lyrics.trackName?.toLowerCase().contains(lowerQuery) ?? false) ||
+          (lyrics.artistName?.toLowerCase().contains(lowerQuery) ?? false) ||
+          (lyrics.albumName?.toLowerCase().contains(lowerQuery) ?? false);
     }).toList();
   }
 

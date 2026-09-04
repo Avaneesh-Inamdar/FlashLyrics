@@ -215,6 +215,13 @@ class MediaNotifier extends StateNotifier<MediaState> {
     return await _service.setPlaying(playing);
   }
 
+  Future<bool> skipToNext() => _service.skipToNext();
+  Future<bool> skipToPrevious() => _service.skipToPrevious();
+  Future<bool> showLyricsOverlay({required String title, required String artist, required String lyrics, String currentLine = '', String lrcLyrics = '', int syncOffsetMs = 0}) =>
+      _service.showOverlay(title: title, artist: artist, lyrics: lyrics, currentLine: currentLine, lrcLyrics: lrcLyrics, syncOffsetMs: syncOffsetMs);
+  Future<bool> hideLyricsOverlay() => _service.hideOverlay();
+  Future<bool> updateOverlayLyrics(String current, String next) => _service.updateOverlayLyrics(current, next);
+
   @override
   void dispose() {
     _songSubscription?.cancel();

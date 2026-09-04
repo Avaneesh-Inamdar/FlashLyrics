@@ -12,6 +12,7 @@ import '../../domain/usecases/lyrics_usecases.dart';
 export 'lyrics_provider.dart';
 export 'media_provider.dart';
 export 'settings_provider.dart';
+export 'overlay_provider.dart';
 
 /// SharedPreferences provider
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {

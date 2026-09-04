@@ -1,8 +1,6 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/entities/song.dart';
 
@@ -37,10 +35,23 @@ class _SongCardState extends State<SongCard> {
 
   Future<void> _resolveArtwork() async {
     final normalized = _normalizeArtworkUrl(widget.song.artworkUrl);
+    // If normalized is a file:// URL, verify file exists; otherwise fallback to iTunes
     if (normalized != null) {
-      if (!mounted) return;
-      setState(() => _resolvedArtworkUrl = normalized);
-      return;
+      if (normalized.startsWith('file://')) {
+        final filePath = _filePathFromUrl(normalized);
+        if (filePath != null && await File(filePath).exists()) {
+          if (!mounted) return;
+          setState(() => _resolvedArtworkUrl = normalized);
+          return;
+        }
+        // File doesn't exist (stale cache) -> fall through to network fallback
+      } else if (!normalized.startsWith('content://')) {
+        // Valid http/https url
+        if (!mounted) return;
+        setState(() => _resolvedArtworkUrl = normalized);
+        return;
+      }
+      // content:// cannot be rendered directly by Flutter -> fallback to iTunes
     }
 
     final fetched = await _fetchArtworkFromItunes(
@@ -48,17 +59,52 @@ class _SongCardState extends State<SongCard> {
       widget.song.title,
     );
     if (!mounted) return;
-    setState(() => _resolvedArtworkUrl = fetched);
+    if (fetched != null) {
+      setState(() => _resolvedArtworkUrl = fetched);
+    } else if (normalized != null && !normalized.startsWith('content://')) {
+      setState(() => _resolvedArtworkUrl = normalized);
+    } else {
+      setState(() => _resolvedArtworkUrl = null);
+    }
+  }
+
+  String? _filePathFromUrl(String fileUrl) {
+    try {
+      final uri = Uri.parse(fileUrl);
+      if (uri.scheme == 'file') return uri.toFilePath();
+      // Handle malformed file:/path (single slash) from older caches
+      if (fileUrl.startsWith('file:/')) {
+        return fileUrl.replaceFirst(RegExp(r'^file:/+'), '/');
+      }
+      return fileUrl;
+    } catch (_) {
+      return null;
+    }
   }
 
   String? _normalizeArtworkUrl(String? url) {
     if (url == null || url.trim().isEmpty) return null;
-    if (url.startsWith('file://') || url.startsWith('content://')) {
-      return url;
+    final trimmed = url.trim();
+    // Handle file URIs (including file:/ with single slash from old cache)
+    if (trimmed.startsWith('file://') || trimmed.startsWith('file:/')) {
+      // Normalize to proper file://
+      final path = trimmed.replaceFirst(RegExp(r'^file:/+'), '/');
+      return 'file://$path';
     }
-    return url
+    if (trimmed.startsWith('content://')) {
+      return trimmed;
+    }
+    // Remote URL cleanup
+    var cleaned = trimmed
         .replaceAll('{w}x{h}bb', '600x600bb')
-        .replaceAll('{w}x{h}', '600x600');
+        .replaceAll('{w}x{h}', '600x600')
+        .replaceAll('100x100bb', '600x600bb')
+        .replaceAll('100x100', '600x600');
+    // Ensure https for network images (Android 10+ cleartext issues)
+    if (cleaned.startsWith('http://')) {
+      cleaned = cleaned.replaceFirst('http://', 'https://');
+    }
+    return cleaned;
   }
 
   Future<String?> _fetchArtworkFromItunes(String artist, String title) async {
@@ -92,61 +138,37 @@ class _SongCardState extends State<SongCard> {
     final surfaceLight = isDark
         ? AppTheme.surfaceLight
         : AppTheme.lightSurfaceLight;
-    return GestureDetector(
-      onTap: widget.onTap,
-      child:
-          Container(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            surfaceColor.withValues(alpha: 0.8),
-                            surfaceLight.withValues(alpha: 0.6),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryColor.withValues(
-                              alpha: 0.15,
-                            ),
-                            blurRadius: 30,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            _buildAlbumArt(surfaceLight),
-                            const SizedBox(width: 16),
-                            Expanded(child: _buildSongInfo(context)),
-                            _buildPlayingIndicator(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              )
-              .animate()
-              .fadeIn(duration: 400.ms)
-              .slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic),
+    // Reduced blur & gradient for performance - solid surface improves recents preview
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: surfaceLight, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                _buildAlbumArt(surfaceLight),
+                const SizedBox(width: 14),
+                Expanded(child: _buildSongInfo(context)),
+                _buildPlayingIndicator(),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -176,20 +198,29 @@ class _SongCardState extends State<SongCard> {
   }
 
   Widget _buildArtworkImage(String artworkUrl, Color surfaceLight) {
-    final uri = Uri.tryParse(artworkUrl);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final progressColor = isDark
         ? AppTheme.textSecondary
         : AppTheme.lightTextSecondary;
-    if (uri != null && uri.scheme == 'file') {
-      return Image.file(
-        File(uri.toFilePath()),
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('🎨 Failed to load local album art: $error');
-          return _buildArtPlaceholder(surfaceLight);
-        },
-      );
+    // Handle file:// URIs robustly, including legacy single-slash format
+    if (artworkUrl.startsWith('file://') || artworkUrl.startsWith('file:/')) {
+      final path = _filePathFromUrl(artworkUrl);
+      if (path != null) {
+        final file = File(path);
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('🎨 Failed to load local album art: $error path=$path');
+            // Fallback to network iTunes fetch placeholder; trigger async refetch?
+            return _buildArtPlaceholder(surfaceLight);
+          },
+        );
+      }
+    }
+    // content:// cannot be loaded directly - show placeholder and rely on iTunes fallback
+    if (artworkUrl.startsWith('content://')) {
+      return _buildArtPlaceholder(surfaceLight);
     }
 
     return Image.network(
@@ -240,7 +271,6 @@ class _SongCardState extends State<SongCard> {
     final textSecondary = isDark
         ? AppTheme.textSecondary
         : AppTheme.lightTextSecondary;
-    final accent = isDark ? AppTheme.primaryLight : AppTheme.primaryDark;
     final rawSource = widget.song.source?.trim() ?? '';
     final displaySource = rawSource.isEmpty ? 'Media Player' : rawSource;
 
@@ -248,19 +278,14 @@ class _SongCardState extends State<SongCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        ShaderMask(
-          shaderCallback: (bounds) => LinearGradient(
-            colors: [textPrimary, accent],
-          ).createShader(bounds),
-          child: Text(
-            widget.song.title,
-            style: textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        Text(
+          widget.song.title,
+          style: textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: textPrimary,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 4),
         Text(
@@ -277,20 +302,13 @@ class _SongCardState extends State<SongCard> {
 
   Widget _buildSourceBadge(String source, bool isDark) {
     final sourceColor = _getSourceColor(source);
-    final bgAlpha = isDark ? 0.25 : 0.18;
-    final bgAlphaLight = isDark ? 0.15 : 0.12;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            sourceColor.withValues(alpha: bgAlpha),
-            sourceColor.withValues(alpha: bgAlphaLight),
-          ],
-        ),
+        color: sourceColor.withValues(alpha: isDark ? 0.15 : 0.12),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: sourceColor.withValues(alpha: 0.35),
+          color: sourceColor.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -314,38 +332,18 @@ class _SongCardState extends State<SongCard> {
   }
 
   Widget _buildPlayingIndicator() {
+    // Static indicator - no repeating animation to avoid recents lag
     return Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppTheme.primaryGradient,
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryColor.withValues(alpha: 0.4),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Icon(Icons.equalizer_rounded, color: Colors.white, size: 18),
-          ),
-        )
-        .animate(onPlay: (c) => c.repeat())
-        .scale(
-          begin: const Offset(1.0, 1.0),
-          end: const Offset(1.1, 1.1),
-          duration: 800.ms,
-          curve: Curves.easeInOut,
-        )
-        .then()
-        .scale(
-          begin: const Offset(1.1, 1.1),
-          end: const Offset(1.0, 1.0),
-          duration: 800.ms,
-          curve: Curves.easeInOut,
-        );
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor,
+        shape: BoxShape.circle,
+      ),
+      child: const Center(
+        child: Icon(Icons.equalizer_rounded, color: Colors.white, size: 18),
+      ),
+    );
   }
 
   Color _getSourceColor(String source) {

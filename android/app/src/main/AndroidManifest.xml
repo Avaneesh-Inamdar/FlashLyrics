@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
@@ -14,6 +15,12 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+
+        <!-- Google Mobile Ads (AdMob) App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3987982513065210~6838985448"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -61,6 +68,33 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Floating lyrics overlay service -->
+        <service
+            android:name=".LyricsOverlayService"
+            android:foregroundServiceType="specialUse|mediaPlayback"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_lyrics_overlay" />
+        </service>
+        
+        <!-- Transparent activity to collapse notification panel and show floating overlay -->
+        <activity
+            android:name=".FloatTrampolineActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:exported="true" />
+
+        <!-- Notification action receivers -->
+        <receiver
+            android:name=".FloatOverlayReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".DismissMusicReceiver"
+            android:exported="false" />
         
         <meta-data
             android:name="flutterEmbedding"

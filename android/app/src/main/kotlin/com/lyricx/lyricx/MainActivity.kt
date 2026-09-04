@@ -1,8 +1,10 @@
 package com.lyricx.lyricx
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
@@ -12,6 +14,8 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.NonNull
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -34,6 +38,21 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        MusicNotificationManager.createNotificationChannel(this)
+        MusicNotificationManager.ensureListenerBound(this)
+        // Restore overlay cache from prefs
+        try {
+            val prefs = getSharedPreferences("overlay_cache", Context.MODE_PRIVATE)
+            val t = prefs.getString("title", "") ?: ""
+            val a = prefs.getString("artist", "") ?: ""
+            val l = prefs.getString("lrc", "") ?: ""
+            val p = prefs.getString("plain", "") ?: ""
+            val o = prefs.getInt("offset", 0) ?: 0
+            val seek = prefs.getBoolean("seekEnabled", false)
+            if (t.isNotEmpty() && a.isNotEmpty()) OverlayLyricsCache.update(t, a, l, p, o, seek)
+        } catch (_: Exception) {}
+        // If launched from music notification, handle auto-show
+        handleNotificationIntent(intent)
         // High refresh rate fix: prefer the highest available refresh rate mode.
         // On devices with 90/120Hz panels Flutter otherwise may be throttled to 60Hz
         // if the window doesn't explicitly request a high-refresh mode.
@@ -136,6 +155,82 @@ class MainActivity : FlutterActivity() {
                     val playing = call.argument<Boolean>("playing") ?: false
                     val success = setPlaybackState(playing)
                     result.success(success)
+                }
+                "skipToNext" -> {
+                    val success = skipToNext()
+                    result.success(success)
+                }
+                "skipToPrevious" -> {
+                    val success = skipToPrevious()
+                    result.success(success)
+                }
+                // Overlay / PiP controls
+                "showOverlay" -> {
+                    val hasPermission = checkOverlayPermission()
+                    if (!hasPermission) {
+                        result.error("NO_PERMISSION", "Overlay permission not granted", null)
+                    } else {
+                        val title = call.argument<String>("title") ?: ""
+                        val artist = call.argument<String>("artist") ?: ""
+                        val lyrics = call.argument<String>("lyrics") ?: ""
+                        val currentLine = call.argument<String>("currentLine") ?: ""
+                        val lrc = call.argument<String>("lrcLyrics") ?: call.argument<String>("lrc") ?: ""
+                        val offset = (call.argument<Int>("syncOffsetMs") ?: 0)
+                        val seekEnabled = call.argument<Boolean>("enableSeek") ?: false
+                        showLyricsOverlay(title, artist, lyrics, currentLine, lrc, offset, seekEnabled)
+                        result.success(true)
+                    }
+                }
+                "hideOverlay" -> {
+                    hideLyricsOverlay()
+                    result.success(true)
+                }
+                "updateOverlayLyrics" -> {
+                    val currentLine = call.argument<String>("currentLine") ?: ""
+                    val nextLine = call.argument<String>("nextLine") ?: ""
+                    updateOverlayLyrics(currentLine, nextLine)
+                    result.success(true)
+                }
+                "enterPipMode" -> {
+                    val success = enterPipMode()
+                    result.success(success)
+                }
+                "checkPostNotificationPermission" -> {
+                    val granted = if (Build.VERSION.SDK_INT >= 33) {
+                        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                    } else true
+                    result.success(granted)
+                }
+                "requestPostNotificationPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1002)
+                    }
+                    result.success(null)
+                }
+                "cacheOverlayLyrics" -> {
+                    val title = call.argument<String>("title") ?: ""
+                    val artist = call.argument<String>("artist") ?: ""
+                    val lrc = call.argument<String>("lrcLyrics") ?: ""
+                    val plain = call.argument<String>("plainLyrics") ?: ""
+                    val offset = call.argument<Int>("syncOffsetMs") ?: 0
+                    val seekEnabled = call.argument<Boolean>("enableSeek") ?: OverlayLyricsCache.seekEnabled
+                    OverlayLyricsCache.update(title, artist, lrc, plain, offset, seekEnabled)
+                    // Also persist to prefs for after reboot
+                    try {
+                        getSharedPreferences("overlay_cache", Context.MODE_PRIVATE).edit()
+                            .putString("title", title)
+                            .putString("artist", artist)
+                            .putString("lrc", lrc)
+                            .putString("plain", plain)
+                            .putInt("offset", offset)
+                            .putBoolean("seekEnabled", seekEnabled)
+                            .apply()
+                    } catch (_: Exception) {}
+                    result.success(true)
+                }
+                "clearOverlayCache" -> {
+                    OverlayLyricsCache.update("", "", "", "", 0)
+                    result.success(true)
                 }
                 else -> {
                     result.notImplemented()
@@ -292,21 +387,38 @@ class MainActivity : FlutterActivity() {
             val position = bestController.playbackState?.position ?: 0L
             val isPlaying = bestController.playbackState?.state == PlaybackState.STATE_PLAYING
             
-            // Extract album art - try URI first, then bitmap
+            // Extract album art - try URI first, then bitmap with comprehensive key fallback
+            // On Android 10+ some apps store art under different keys
             var artworkUrl: String? = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
                 ?: metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)
+                ?: metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
             
-            // If URI is a content:// URI, try to cache it as a file
+            // If URI is a content:// URI, try to cache it as a file for older Android compatibility
             if (!artworkUrl.isNullOrEmpty() && artworkUrl.startsWith("content://")) {
-                artworkUrl = cacheContentUri(artworkUrl, title, artist)
+                val cached = cacheContentUri(artworkUrl, title, artist)
+                if (cached != null) artworkUrl = cached
+                // Keep original content:// as fallback if caching fails, Dart will try network fallback
             }
             
-            // If no URI, try to get bitmap and cache it
-            if (artworkUrl.isNullOrEmpty()) {
-                val bitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                    ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            // If no URI or URI caching didn't produce file, try to get bitmap and cache it
+            if (artworkUrl.isNullOrEmpty() || artworkUrl.startsWith("content://")) {
+                // Try multiple bitmap keys for maximum compatibility
+                var bitmap: Bitmap? = null
+                try {
+                    bitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    if (bitmap == null) bitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                    if (bitmap == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        bitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                    }
+                    // Some Samsung/MIUI devices store art as display icon
+                    if (bitmap == null) {
+                        @Suppress("DEPRECATION")
+                        bitmap = metadata.getBitmap("android.media.metadata.ALBUM_ART")
+                    }
+                } catch (_: Exception) {}
                 if (bitmap != null) {
-                    artworkUrl = cacheArtworkBitmap(bitmap, title, artist)
+                    val cachedBitmap = cacheArtworkBitmap(bitmap, title, artist)
+                    if (cachedBitmap != null) artworkUrl = cachedBitmap
                 }
             }
             
@@ -321,6 +433,11 @@ class MainActivity : FlutterActivity() {
             
             val source = getSourceNameForPackage(bestController.packageName)
             MediaNotificationListener.currentSource = source
+            
+            // Keep music notification in sync even when direct querying
+            MusicNotificationManager.showMusicNotification(
+                this, title, artist, source, isPlaying, bestController.packageName
+            )
             
             Log.d(TAG, "Direct query found: $title by $artist ($source), art=$artworkUrl")
             
@@ -349,14 +466,25 @@ class MainActivity : FlutterActivity() {
                 .lowercase()
                 .replace(Regex("[^a-z0-9_]+"), "_")
                 .trim('_')
-            val file = File(cacheDir, "art_direct_$safeName.png")
-            // Only write if file doesn't exist or is old (avoid re-writing same art)
-            if (!file.exists() || file.length() == 0L) {
-                FileOutputStream(file).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
-                }
+                .take(64)
+            val file = File(cacheDir, "art_direct_${safeName}.png")
+            // Re-write if file missing or bitmap differs (check size)
+            // On Android 10+ ensure we handle large bitmaps by scaling down to 600x600 max
+            var bmpToSave = bitmap
+            val maxDim = 700
+            if (bitmap.width > maxDim || bitmap.height > maxDim) {
+                val ratio = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height)
+                val newW = (bitmap.width * ratio).toInt()
+                val newH = (bitmap.height * ratio).toInt()
+                bmpToSave = Bitmap.createScaledBitmap(bitmap, newW, newH, true)
             }
-            file.toURI().toString()
+            // Always write to ensure fresh art; delete stale file first
+            if (file.exists()) file.delete()
+            FileOutputStream(file).use { out ->
+                bmpToSave.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            }
+            if (bmpToSave != bitmap) bmpToSave.recycle()
+            "file://${file.absolutePath}"
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cache album art bitmap", e)
             null
@@ -369,16 +497,19 @@ class MainActivity : FlutterActivity() {
                 .lowercase()
                 .replace(Regex("[^a-z0-9_]+"), "_")
                 .trim('_')
+                .take(64)
             val uri = Uri.parse(uriString)
             val input = contentResolver.openInputStream(uri) ?: return null
-            val file = File(cacheDir, "art_direct_${safeName}_uri.png")
+            val file = File(cacheDir, "art_direct_${safeName}_uri.jpg")
+            // overwrite previous
+            if (file.exists()) file.delete()
             FileOutputStream(file).use { out ->
                 input.copyTo(out)
             }
-            input.close()
-            file.toURI().toString()
+            try { input.close() } catch (_: Exception) {}
+            "file://${file.absolutePath}"
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to cache content URI art", e)
+            Log.e(TAG, "Failed to cache content URI art: $uriString", e)
             null
         }
     }
@@ -505,20 +636,211 @@ class MainActivity : FlutterActivity() {
                 return false
             }
             
-            val controller = sessionTokens[0]
+            val controller = selectBestController(sessionTokens)
+                ?: return false
             val transportControls = controller.transportControls
             
             if (playing) {
                 transportControls.play()
-                Log.d(TAG, "setPlaybackState: Sent play command")
+                Log.d(TAG, "setPlaybackState: Sent play command to ${controller.packageName}")
             } else {
                 transportControls.pause()
-                Log.d(TAG, "setPlaybackState: Sent pause command")
+                Log.d(TAG, "setPlaybackState: Sent pause command to ${controller.packageName}")
             }
             true
         } catch (e: Exception) {
             Log.e(TAG, "setPlaybackState failed: ${e.message}")
             false
         }
+    }
+
+    private fun skipToNext(): Boolean {
+        return try {
+            val msm = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+            val controllers = msm?.getActiveSessions(ComponentName(this, MediaNotificationListener::class.java))
+            if (controllers.isNullOrEmpty()) {
+                Log.d(TAG, "skipToNext: No active sessions")
+                return false
+            }
+            val controller = selectBestController(controllers) ?: return false
+            controller.transportControls.skipToNext()
+            Log.d(TAG, "skipToNext: Sent to ${controller.packageName}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "skipToNext failed", e)
+            false
+        }
+    }
+
+    private fun skipToPrevious(): Boolean {
+        return try {
+            val msm = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+            val controllers = msm?.getActiveSessions(ComponentName(this, MediaNotificationListener::class.java))
+            if (controllers.isNullOrEmpty()) {
+                Log.d(TAG, "skipToPrevious: No active sessions")
+                return false
+            }
+            val controller = selectBestController(controllers) ?: return false
+            controller.transportControls.skipToPrevious()
+            Log.d(TAG, "skipToPrevious: Sent to ${controller.packageName}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "skipToPrevious failed", e)
+            false
+        }
+    }
+
+    private fun selectBestController(controllers: List<android.media.session.MediaController>): android.media.session.MediaController? {
+        // Prefer playing controller, otherwise first with metadata
+        var best: android.media.session.MediaController? = null
+        var bestPlaying = false
+        for (c in controllers) {
+            val isPlaying = c.playbackState?.state == PlaybackState.STATE_PLAYING
+            if (isPlaying && !bestPlaying) {
+                best = c
+                bestPlaying = true
+            } else if (best == null) {
+                best = c
+                bestPlaying = isPlaying
+            }
+        }
+        return best
+    }
+
+    // --- Overlay / PiP helpers ---
+    private var overlayServiceIntent: Intent? = null
+    // Track if overlay was showing when app came to foreground, so we can restore on pause
+    private var overlayWasShowingBeforeForeground: Boolean = false
+    private var appIsInForeground: Boolean = false
+
+    private fun showLyricsOverlay(title: String, artist: String, lyrics: String, currentLine: String, lrcLyrics: String = "", syncOffsetMs: Int = 0, seekEnabled: Boolean = OverlayLyricsCache.seekEnabled) {
+        try {
+            val intent = Intent(this, LyricsOverlayService::class.java).apply {
+                action = LyricsOverlayService.ACTION_SHOW
+                putExtra("title", title)
+                putExtra("artist", artist)
+                putExtra("lyrics", lyrics)
+                putExtra("currentLine", currentLine)
+                putExtra("lrcLyrics", lrcLyrics)
+                putExtra("syncOffsetMs", syncOffsetMs)
+                putExtra("enableSeek", seekEnabled)
+            }
+            overlayServiceIntent = intent
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Log.d(TAG, "Overlay service started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show overlay", e)
+        }
+    }
+
+    private fun hideLyricsOverlay() {
+        try {
+            val intent = Intent(this, LyricsOverlayService::class.java).apply {
+                action = LyricsOverlayService.ACTION_HIDE
+            }
+            startService(intent)
+            Log.d(TAG, "Overlay hide requested")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to hide overlay", e)
+        }
+    }
+
+    private fun updateOverlayLyrics(currentLine: String, nextLine: String) {
+        try {
+            val intent = Intent(this, LyricsOverlayService::class.java).apply {
+                action = LyricsOverlayService.ACTION_UPDATE
+                putExtra("currentLine", currentLine)
+                putExtra("nextLine", nextLine)
+            }
+            startService(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update overlay", e)
+        }
+    }
+
+    private fun enterPipMode(): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val params = android.app.PictureInPictureParams.Builder().build()
+                enterPictureInPictureMode(params)
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "PIP failed", e)
+            false
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        appIsInForeground = true
+        MusicNotificationManager.ensureListenerBound(this)
+        // If overlay is currently showing, hide it while the app is visible
+        if (LyricsOverlayService.isOverlayShowing) {
+            overlayWasShowingBeforeForeground = true
+            hideLyricsOverlay()
+            Log.d(TAG, "App foregrounded — overlay hidden temporarily")
+        } else {
+            overlayWasShowingBeforeForeground = false
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        appIsInForeground = false
+        // Re-show overlay when app goes to background, if it was showing before and music is playing
+        if (overlayWasShowingBeforeForeground) {
+            val isPlaying = MediaNotificationListener.currentIsPlaying
+            val title = MediaNotificationListener.currentTitle
+            val artist = MediaNotificationListener.currentArtist
+            if (isPlaying && !title.isNullOrEmpty() && !artist.isNullOrEmpty() &&
+                checkOverlayPermission()) {
+                val lrc = OverlayLyricsCache.lrc
+                val plain = OverlayLyricsCache.plain
+                val offset = OverlayLyricsCache.syncOffsetMs
+                val seek = OverlayLyricsCache.seekEnabled
+                showLyricsOverlay(title, artist, plain, "", lrc, offset, seek)
+                Log.d(TAG, "App backgrounded — overlay restored for $title by $artist")
+            }
+            overlayWasShowingBeforeForeground = false
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        if (intent == null) return
+        val autoShow = intent.getBooleanExtra("autoShowOverlay", false)
+        if (!autoShow) return
+        val title = intent.getStringExtra("title") ?: OverlayLyricsCache.title
+        val artist = intent.getStringExtra("artist") ?: OverlayLyricsCache.artist
+        if (title.isEmpty() || artist.isEmpty()) return
+        // Defer slightly to ensure Flutter engine ready
+        window.decorView.postDelayed({
+            val lrc = OverlayLyricsCache.lrc
+            val plain = OverlayLyricsCache.plain
+            val offset = OverlayLyricsCache.syncOffsetMs
+            val seek = OverlayLyricsCache.seekEnabled
+            val lyrics = if (lrc.isNotEmpty()) lrc else plain
+            if (Settings.canDrawOverlays(this) && lyrics.isNotEmpty()) {
+                showLyricsOverlay(title, artist, plain, "", lrc, offset, seek)
+            } else {
+                // No cached lyrics yet - just ensure app is visible; Flutter will fetch
+                Log.d(TAG, "No cached lyrics for $title, opening app for fetch")
+            }
+        }, 800)
     }
 }
