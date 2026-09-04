@@ -356,10 +356,8 @@ class SettingsScreen extends ConsumerWidget {
                           context,
                           icon: Icons.info_outline_rounded,
                           title: 'App Version',
-                          subtitle: '${AppConstants.appVersion} (Play Store Ready)',
+                          subtitle: 'v${AppConstants.appVersion}',
                         ),
-                        _buildDivider(context),
-                        _buildNoteCard(context),
                         _buildDivider(context),
                         _buildTapTile(
                           context,
@@ -676,41 +674,7 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildNoteCard(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.amber.withValues(alpha: isDark ? 0.12 : 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.amber.withValues(alpha: isDark ? 0.35 : 0.25),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.new_releases_outlined, color: Colors.amber, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Upgrading from v1.2 or older? Please uninstall the old version first. Future updates will be delivered via Google Play Store with an official release key.',
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.4,
-                  color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildStatusTile(BuildContext context, bool isActive) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
