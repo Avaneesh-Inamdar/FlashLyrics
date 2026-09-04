@@ -18,56 +18,100 @@ class AdBannerWidget extends ConsumerStatefulWidget {
 class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
+  bool _isLoading = false;
+  bool _fallbackToTest = false;
 
   // Real Ad Unit ID provided by user
-  static const String _prodAdUnitId = 'ca-app-pub-3987982513065210/2035205150';
-  // Google's official Android Banner Test Ad Unit ID to prevent account suspension during development
-  static const String _testAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
+  static const String _prodAdUnitId =
+      'ca-app-pub-3987982513065210/2035205150';
+  // Google's official Android Banner Test Ad Unit ID
+  static const String _testAdUnitId =
+      'ca-app-pub-3940256099942544/6300978111';
 
-  String get _adUnitId => kReleaseMode ? _prodAdUnitId : _testAdUnitId;
+  String _getAdUnitId({required bool useTestAds}) {
+    if (useTestAds || !kReleaseMode || _fallbackToTest) {
+      return _testAdUnitId;
+    }
+    return _prodAdUnitId;
+  }
 
   @override
   void initState() {
     super.initState();
-    _checkAndLoadAd();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _checkAndLoadAd();
+      }
+    });
   }
 
   void _checkAndLoadAd() {
-    final adsEnabled = ref.read(settingsProvider).enableAds;
-    if (adsEnabled && _bannerAd == null) {
-      _loadBanner();
+    final settings = ref.read(settingsProvider);
+    if (settings.enableAds && _bannerAd == null && !_isLoading) {
+      _loadBanner(useTestAds: settings.useTestAds);
     }
   }
 
-  void _loadBanner() {
+  void _loadBanner({required bool useTestAds}) {
+    if (_isLoading) return;
+    _isLoading = true;
+
     _bannerAd?.dispose();
     _bannerAd = null;
     _isLoaded = false;
 
-    _bannerAd = BannerAd(
-      adUnitId: _adUnitId,
+    final unitId = _getAdUnitId(useTestAds: useTestAds);
+    debugPrint(
+      'AdBannerWidget: Loading banner with unit ID: $unitId (test: ${unitId == _testAdUnitId})',
+    );
+
+    final ad = BannerAd(
+      adUnitId: unitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
-        onAdLoaded: (ad) {
+        onAdLoaded: (loadedAd) {
+          debugPrint('AdBannerWidget: Banner loaded successfully (${loadedAd.adUnitId})');
           if (mounted) {
             setState(() {
+              _bannerAd = loadedAd as BannerAd;
               _isLoaded = true;
+              _isLoading = false;
             });
+          } else {
+            loadedAd.dispose();
           }
         },
-        onAdFailedToLoad: (ad, error) {
-          debugPrint('BannerAd failed to load: $error');
-          ad.dispose();
-          if (mounted) {
+        onAdFailedToLoad: (failedAd, error) {
+          debugPrint('AdBannerWidget: Banner failed to load ($unitId): $error');
+          failedAd.dispose();
+
+          if (!mounted) return;
+
+          // If production ad unit failed (e.g. Account not approved yet, code: 3),
+          // immediately fallback to Google's official sample test ad unit.
+          if (!_fallbackToTest && unitId == _prodAdUnitId) {
+            debugPrint('AdBannerWidget: Falling back to Google sample/test banner ad');
             setState(() {
               _bannerAd = null;
               _isLoaded = false;
+              _isLoading = false;
+              _fallbackToTest = true;
             });
+            _loadBanner(useTestAds: true);
+            return;
           }
+
+          setState(() {
+            _bannerAd = null;
+            _isLoaded = false;
+            _isLoading = false;
+          });
         },
       ),
-    )..load();
+    );
+
+    ad.load();
   }
 
   @override
@@ -78,22 +122,38 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen to changes in enableAds
+    ref.listen<bool>(
+      settingsProvider.select((s) => s.enableAds),
+      (prev, enabled) {
+        if (enabled && _bannerAd == null && !_isLoading) {
+          _fallbackToTest = false;
+          _loadBanner(useTestAds: ref.read(settingsProvider).useTestAds);
+        } else if (!enabled && _bannerAd != null) {
+          setState(() {
+            _bannerAd?.dispose();
+            _bannerAd = null;
+            _isLoaded = false;
+            _isLoading = false;
+          });
+        }
+      },
+    );
+
+    // Listen to changes in useTestAds
+    ref.listen<bool>(
+      settingsProvider.select((s) => s.useTestAds),
+      (prev, testAds) {
+        if (ref.read(settingsProvider).enableAds) {
+          _fallbackToTest = false;
+          _loadBanner(useTestAds: testAds);
+        }
+      },
+    );
+
     final adsEnabled = ref.watch(settingsProvider.select((s) => s.enableAds));
 
-    if (!adsEnabled) {
-      if (_bannerAd != null) {
-        _bannerAd?.dispose();
-        _bannerAd = null;
-        _isLoaded = false;
-      }
-      return const SizedBox.shrink();
-    }
-
-    if (_bannerAd == null) {
-      _loadBanner();
-    }
-
-    if (!_isLoaded || _bannerAd == null) {
+    if (!adsEnabled || !_isLoaded || _bannerAd == null) {
       return const SizedBox.shrink();
     }
 
@@ -101,7 +161,7 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
       alignment: Alignment.center,
       width: _bannerAd!.size.width.toDouble(),
       height: _bannerAd!.size.height.toDouble(),
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: AdWidget(ad: _bannerAd!),
     );
   }

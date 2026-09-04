@@ -321,6 +321,22 @@ class SettingsScreen extends ConsumerWidget {
                                 .setEnableAds(value);
                           },
                         ),
+                        if (settings.enableAds) ...[
+                          _buildDivider(context),
+                          _buildSwitchTile(
+                            context,
+                            icon: Icons.developer_mode_rounded,
+                            title: 'Sample Test Ads',
+                            subtitle:
+                                'Display Google test banner (recommended until AdMob account is approved)',
+                            value: settings.useTestAds,
+                            onChanged: (value) {
+                              ref
+                                  .read(settingsProvider.notifier)
+                                  .setUseTestAds(value);
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),

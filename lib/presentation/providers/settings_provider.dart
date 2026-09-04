@@ -19,6 +19,7 @@ class AppSettings {
   final String accentColor;
   final int lyricsSyncOffset; // Offset in milliseconds for lyrics sync
   final bool enableAds; // Toggle Google Mobile Ads (AdMob)
+  final bool useTestAds; // Use Google sample/test banner ads (useful until account is approved)
 
   const AppSettings({
     this.fontSize = 18.0,
@@ -28,6 +29,7 @@ class AppSettings {
     this.floatingLyricsEnabled = false,
     this.floatingOverlaySeekEnabled = false,
     this.enableAds = true,
+    this.useTestAds = true,
     this.themeMode = ThemeModeOption.auto,
     this.accentColor = 'emerald',
     this.lyricsSyncOffset = 0,
@@ -80,6 +82,7 @@ class AppSettings {
     bool? floatingLyricsEnabled,
     bool? floatingOverlaySeekEnabled,
     bool? enableAds,
+    bool? useTestAds,
     ThemeModeOption? themeMode,
     List<String>? providerPriority,
     String? accentColor,
@@ -93,6 +96,7 @@ class AppSettings {
       floatingLyricsEnabled: floatingLyricsEnabled ?? this.floatingLyricsEnabled,
       floatingOverlaySeekEnabled: floatingOverlaySeekEnabled ?? this.floatingOverlaySeekEnabled,
       enableAds: enableAds ?? this.enableAds,
+      useTestAds: useTestAds ?? this.useTestAds,
       themeMode: themeMode ?? this.themeMode,
       accentColor: accentColor ?? this.accentColor,
       lyricsSyncOffset: lyricsSyncOffset ?? this.lyricsSyncOffset,
@@ -108,6 +112,7 @@ class AppSettings {
     'floatingLyricsEnabled': floatingLyricsEnabled,
     'floatingOverlaySeekEnabled': floatingOverlaySeekEnabled,
     'enableAds': enableAds,
+    'useTestAds': useTestAds,
     'themeMode': themeMode.name,
     'accentColor': accentColor,
     'lyricsSyncOffset': lyricsSyncOffset,
@@ -138,6 +143,7 @@ class AppSettings {
       floatingLyricsEnabled: json['floatingLyricsEnabled'] as bool? ?? false,
       floatingOverlaySeekEnabled: json['floatingOverlaySeekEnabled'] as bool? ?? false,
       enableAds: json['enableAds'] as bool? ?? true,
+      useTestAds: json['useTestAds'] as bool? ?? true,
       themeMode: parseThemeMode(json['themeMode']),
       accentColor: json['accentColor'] as String? ?? 'emerald',
       lyricsSyncOffset: json['lyricsSyncOffset'] as int? ?? 0,
@@ -231,6 +237,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setEnableAds(bool value) {
     state = state.copyWith(enableAds: value);
+    _saveSettings();
+  }
+
+  void setUseTestAds(bool value) {
+    state = state.copyWith(useTestAds: value);
     _saveSettings();
   }
 
