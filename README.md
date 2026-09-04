@@ -18,24 +18,24 @@ Android app that detects what song you're playing and shows the lyrics. Works wi
 
 A brand new version of **FlashLyrics (v1.3.0)** will be available in **2–3 days**, both on [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases) and directly on the **Google Play Store**!
 
-> ⚠️ **Important Note for Existing Users (v1.2.0 or earlier)**:
+> **Important Note for Existing Users (v1.2.0 or earlier)**:
 > When v1.3.0 launches, please make sure to **uninstall your existing version first** before installing, as FlashLyrics is transitioning to the Google Play Store with an official release signing key. Attempting to install over v1.2 directly will cause a signature mismatch ("App not installed") error.
 
 ## What's New in v1.3.0
 
-- 🪟 **Floating Lyrics Overlay Window**: Always-on-top lyrics widget over Spotify, YouTube Music, Apple Music, and more with real-time scrolling, tap-to-seek, and fluid multidirectional resizing.
-- ⏳ **Instant Skeleton Loading**: Seamless skeleton transition effect in the floating overlay as soon as tracks switch.
-- 🔔 **Now Playing Media Notification**: Persistent notification keeping track info accessible with a 1-tap **"Float"** button to summon the floating lyrics instantly without opening the full app.
-- ⚡ **Zero-Jank Ultra Smooth Performance**: Eliminated frame drops and main-thread rebuilds for silky 120Hz scrolling and instantaneous app switching.
-- 📤 **Intelligent Share Navigation**: Opening lyric sharing automatically highlights and scrolls straight to the currently playing line, with centered formatting and album cover art included.
-- ☕ **Buy Me a Coffee Support**: Direct developer support integration in Settings.
-- 📢 **Ad-Supported with Toggle**: Non-intrusive banner ads with a one-click toggle in Settings to turn off anytime.
-- 🏬 **Google Play Store Preparation**: Full compatibility and updated signing keys for Google Play release.
+- **Floating Lyrics Overlay Window**: Always-on-top lyrics widget over Spotify, YouTube Music, Apple Music, and more with real-time scrolling, tap-to-seek, and fluid multidirectional resizing.
+- **Instant Skeleton Loading**: Smooth skeleton transition effect in the floating overlay as soon as tracks switch.
+- **Now Playing Media Notification**: Persistent notification keeping track info accessible with a 1-tap "Float" button to summon the floating lyrics instantly without opening the full app.
+- **Performance Optimization**: Eliminated frame drops and main-thread rebuilds for smooth 120Hz scrolling and fast app switching.
+- **Smart Share Navigation**: Opening lyric sharing automatically highlights and scrolls straight to the currently playing line, with centered formatting and album cover art included.
+- **Buy Me a Coffee Support**: Direct developer support integration in Settings.
+- **Ad-Supported with Toggle**: Non-intrusive banner ads with a one-click toggle in Settings to turn off anytime.
+- **Google Play Store Preparation**: Full compatibility and updated signing keys for Google Play release.
 
 ## Features
 
 
-### 🌓 Light & Dark Mode
+### Light & Dark Mode
 
 Fully supports light and dark themes so it looks great no matter your preference.
 
@@ -43,7 +43,7 @@ Fully supports light and dark themes so it looks great no matter your preference
   <img src="Images/Light%20and%20Dark%20Mode.jpeg" alt="Light and Dark Mode" width="250" />
 </p>
 
-### 📚 Offline Library
+### Offline Library
 
 All lyrics you've viewed are cached locally. Access your entire library offline — instantly.
 
@@ -51,7 +51,7 @@ All lyrics you've viewed are cached locally. Access your entire library offline 
   <img src="Images/Library1.jpeg" alt="Lyrics Library" width="250" />
 </p>
 
-### 🔍 Manual Search
+### Manual Search
 
 Can't find a song automatically? Search for any song by title or artist and get lyrics instantly.
 
@@ -59,7 +59,7 @@ Can't find a song automatically? Search for any song by title or artist and get 
   <img src="Images/Search%20Feature.jpeg" alt="Search Feature" width="250" />
 </p>
 
-### 🎨 Accent Color Customization
+### Accent Color Customization
 
 Personalize the app with your choice of accent colors to match your style.
 
@@ -67,15 +67,15 @@ Personalize the app with your choice of accent colors to match your style.
   <img src="Images/AccentColor.jpeg" alt="Accent Color Customization" width="250" />
 </p>
 
-### 🎵 Synced Lyrics with Tap-to-Seek
+### Synced Lyrics with Tap-to-Seek
 
 Real-time synced lyrics that scroll automatically with the music. Tap on any lyric line to jump to that part of the song - just like your favorite streaming apps!
 
-### 🎛️ Song Controls
+### Song Controls
 
 Control playback directly from the app with the built-in seek bar. Play, pause, and seek to any position in the song without switching apps.
 
-### ⏱️ Lyrics Sync Offset
+### Lyrics Sync Offset
 
 Adjust the lyrics timing if they appear too early or late. Perfect for songs with unusual timing or when the sync is slightly off.
 
