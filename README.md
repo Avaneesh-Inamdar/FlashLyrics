@@ -4,7 +4,8 @@
 
 # FlashLyrics
 
-> **Google Play Alpha Testing**: The new Play Store testing version is currently in alpha launch. Anyone willing to try may email me at [avaneesh.inamdar@gmail.com](mailto:avaneesh.inamdar@gmail.com).
+> **Google Play Alpha Testing**: Join the Google group first:- https://groups.google.com/g/flashlryics  
+> Then opt for testing and download here: https://play.google.com/apps/testing/music.flashlyrics.app
 
 Android app that detects what song you're playing and shows the lyrics. Works with Spotify, YouTube Music, Apple Music, JioSaavn, Gaana, SoundCloud, and pretty much any music app.
 
