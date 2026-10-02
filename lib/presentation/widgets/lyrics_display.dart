@@ -11,6 +11,7 @@ import '../../domain/entities/lyrics.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/song_offset_provider.dart';
 import 'synced_lyrics_display.dart';
 
 /// Widget to display lyrics with support for both plain and synced modes
@@ -59,7 +60,16 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   }
 
   List<String> _plainLyricsLines() {
-    return widget.lyrics.plainLyrics.split('\n');
+    String sourceText = widget.lyrics.plainLyrics;
+    if (sourceText.trim().isEmpty &&
+        widget.lyrics.lrcLyrics != null &&
+        widget.lyrics.lrcLyrics!.trim().isNotEmpty) {
+      sourceText = LrcParser.toCleanPlainText(widget.lyrics.lrcLyrics!);
+    }
+    return sourceText
+        .split('\n')
+        .map((l) => LrcParser.stripTimeTags(l))
+        .toList();
   }
 
   void _ensureLineKeys(int count) {
@@ -641,6 +651,14 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     final dynamicHeight = 400 + (_syncedFontSize - 14) * 8;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final settings = ref.watch(settingsProvider);
+    final songOffsets = ref.watch(songOffsetProvider);
+    final currentSong = ref.watch(lyricsNotifierProvider).currentSong;
+    final songKey = generateSongKey(
+      songId: widget.lyrics.songId,
+      artist: currentSong?.artist,
+      title: currentSong?.title,
+    );
+    final effectiveOffset = songOffsets[songKey] ?? settings.lyricsSyncOffset;
 
     // Clean minimal styling - no gradients
     final backgroundColor = isDark
@@ -664,9 +682,14 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         isPlaying: widget.isPlaying,
         onSeek: widget.onSeek,
         fontSize: _syncedFontSize,
-        syncOffsetMs: settings.lyricsSyncOffset,
+        syncOffsetMs: effectiveOffset,
         onOffsetChanged: (newOffset) {
-          ref.read(settingsProvider.notifier).setLyricsSyncOffset(newOffset);
+          final sKey = generateSongKey(
+            songId: widget.lyrics.songId,
+            artist: currentSong?.artist,
+            title: currentSong?.title,
+          );
+          ref.read(songOffsetProvider.notifier).setSongOffset(sKey, newOffset);
         },
       ),
     ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.98, 0.98));
@@ -773,7 +796,10 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     final lyricsState = ref.read(lyricsNotifierProvider);
     final currentSong = lyricsState.currentSong;
 
-    final selectedLines = _getSelectedLines(_plainLyricsLines());
+    final selectedLines = _getSelectedLines(_plainLyricsLines())
+        .map((l) => LrcParser.stripTimeTags(l))
+        .where((l) => l.trim().isNotEmpty)
+        .toList();
 
     if (currentSong == null || selectedLines.isEmpty) {
       // Fallback to text sharing if no song info
@@ -914,7 +940,16 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       // Replicate synced display's lead time (800ms + user offset) to find the
       // same line the user currently sees highlighted at playback position
       final settings = ref.read(settingsProvider);
-      final lead = const Duration(milliseconds: 800) + Duration(milliseconds: settings.lyricsSyncOffset);
+      final currentSong = ref.read(lyricsNotifierProvider).currentSong;
+      final songKey = generateSongKey(
+        songId: widget.lyrics.songId,
+        artist: currentSong?.artist,
+        title: currentSong?.title,
+      );
+      final effectiveOffset =
+          ref.read(songOffsetProvider)[songKey] ?? settings.lyricsSyncOffset;
+      final lead = const Duration(milliseconds: 800) +
+          Duration(milliseconds: effectiveOffset);
       final adjusted = pos + lead;
       final currentIndex = parsedLrc.getLineIndexAtTime(adjusted);
       if (currentIndex < 0 || currentIndex >= parsedLrc.lines.length) return;
@@ -1008,11 +1043,12 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   }
 
   Future<void> _shareSingleLine(BuildContext context, String line) async {
+    final cleanedLine = LrcParser.stripTimeTags(line);
     // Get current song from lyrics provider
     final lyricsState = ref.read(lyricsNotifierProvider);
     final currentSong = lyricsState.currentSong;
 
-    if (currentSong == null || line.trim().isEmpty) return;
+    if (currentSong == null || cleanedLine.trim().isEmpty) return;
 
     // Show loading indicator
     if (!context.mounted) return;
@@ -1044,7 +1080,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       final imageFile = await LyricsImageGenerator.generateLyricsImage(
         song: currentSong,
-        lines: [line],
+        lines: [cleanedLine],
         isDark: isDark,
       );
 
@@ -1061,7 +1097,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         // Fallback to text if image generation failed
         ScaffoldMessenger.of(context).clearSnackBars();
         final formattedLyrics =
-            '${currentSong.title} - ${currentSong.artist}\n\n$line\n\n— Shared via FlashLyrics';
+            '${currentSong.title} - ${currentSong.artist}\n\n$cleanedLine\n\n— Shared via FlashLyrics';
         Share.share(formattedLyrics);
       }
     } catch (e) {

@@ -4,6 +4,7 @@ import '../../services/media_detection_service.dart';
 import 'media_provider.dart';
 import 'settings_provider.dart';
 import 'lyrics_provider.dart';
+import 'song_offset_provider.dart';
 
 class OverlayState {
   final bool hasPermission;
@@ -54,11 +55,15 @@ class OverlayNotifier extends StateNotifier<OverlayState> {
         final song = lyricsState.currentSong;
         final lyrics = lyricsState.lyrics;
         final newSeek = next.floatingOverlaySeekEnabled;
+        final songKey = song != null
+            ? generateSongKey(songId: song.id, artist: song.artist, title: song.title)
+            : '';
+        final effectiveOffset = _ref.read(songOffsetProvider)[songKey] ?? next.lyricsSyncOffset;
         if (song != null && lyrics != null) {
           // Avoid duplicate if already pushed with this offset/seek
           if (_lastPushedSongId == song.id &&
               _lastPushedLyricsId == lyrics.id &&
-              _lastPushedOffset == next.lyricsSyncOffset &&
+              _lastPushedOffset == effectiveOffset &&
               _lastPushedSeekEnabled == newSeek) {
             return;
           }
@@ -74,12 +79,12 @@ class OverlayNotifier extends StateNotifier<OverlayState> {
               lyrics: lyrics.plainLyrics,
               currentLine: '',
               lrcLyrics: lyrics.lrcLyrics ?? '',
-              syncOffsetMs: next.lyricsSyncOffset,
+              syncOffsetMs: effectiveOffset,
               enableSeek: newSeek,
             );
             _lastPushedSongId = song.id;
             _lastPushedLyricsId = lyrics.id;
-            _lastPushedOffset = next.lyricsSyncOffset;
+            _lastPushedOffset = effectiveOffset;
             _lastPushedSeekEnabled = newSeek;
             // Keep cache in sync
             await MediaDetectionService.cacheOverlayLyricsStatic(
@@ -87,7 +92,7 @@ class OverlayNotifier extends StateNotifier<OverlayState> {
               artist: song.artist,
               lrcLyrics: lyrics.lrcLyrics ?? '',
               plainLyrics: lyrics.plainLyrics,
-              syncOffsetMs: next.lyricsSyncOffset,
+              syncOffsetMs: effectiveOffset,
               enableSeek: newSeek,
             );
           } catch (e) {
@@ -101,7 +106,7 @@ class OverlayNotifier extends StateNotifier<OverlayState> {
               artist: song.artist,
               lrcLyrics: lyrics?.lrcLyrics ?? '',
               plainLyrics: lyrics?.plainLyrics ?? '',
-              syncOffsetMs: next.lyricsSyncOffset,
+              syncOffsetMs: effectiveOffset,
               enableSeek: newSeek,
             );
           } catch (_) {}
@@ -113,12 +118,54 @@ class OverlayNotifier extends StateNotifier<OverlayState> {
               lyrics: lyrics?.plainLyrics ?? '',
               currentLine: lyrics == null ? 'Waiting for lyrics...' : '',
               lrcLyrics: lyrics?.lrcLyrics ?? '',
-              syncOffsetMs: next.lyricsSyncOffset,
+              syncOffsetMs: effectiveOffset,
               enableSeek: newSeek,
             );
             _lastPushedSeekEnabled = newSeek;
           } catch (_) {}
         }
+      }
+    });
+
+    // Auto-update overlay when per-song sync offset changes
+    _ref.listen<Map<String, int>>(songOffsetProvider, (prev, next) async {
+      final lyricsState = _ref.read(lyricsNotifierProvider);
+      final song = lyricsState.currentSong;
+      final lyrics = lyricsState.lyrics;
+      if (song == null) return;
+      final songKey = generateSongKey(songId: song.id, artist: song.artist, title: song.title);
+      final globalOffset = _ref.read(settingsProvider).lyricsSyncOffset;
+      final prevOffset = prev?[songKey] ?? globalOffset;
+      final newOffset = next[songKey] ?? globalOffset;
+      if (prevOffset != newOffset) {
+        final currentSeek = _ref.read(settingsProvider).floatingOverlaySeekEnabled;
+        if (state.isShowing && state.isEnabled && lyrics != null) {
+          try {
+            await _service.showOverlay(
+              title: song.title,
+              artist: song.artist,
+              lyrics: lyrics.plainLyrics,
+              currentLine: '',
+              lrcLyrics: lyrics.lrcLyrics ?? '',
+              syncOffsetMs: newOffset,
+              enableSeek: currentSeek,
+            );
+            _lastPushedSongId = song.id;
+            _lastPushedLyricsId = lyrics.id;
+            _lastPushedOffset = newOffset;
+            _lastPushedSeekEnabled = currentSeek;
+          } catch (_) {}
+        }
+        try {
+          await MediaDetectionService.cacheOverlayLyricsStatic(
+            title: song.title,
+            artist: song.artist,
+            lrcLyrics: lyrics?.lrcLyrics ?? '',
+            plainLyrics: lyrics?.plainLyrics ?? '',
+            syncOffsetMs: newOffset,
+            enableSeek: currentSeek,
+          );
+        } catch (_) {}
       }
     });
     state = state.copyWith(isEnabled: _ref.read(settingsProvider).floatingLyricsEnabled);
@@ -149,7 +196,9 @@ class OverlayNotifier extends StateNotifier<OverlayState> {
       }
 
       // Deduplicate identical pushes (same song, same lyrics, same offset & seek mode)
-      final currentOffset = _ref.read(settingsProvider).lyricsSyncOffset;
+      final songKey = generateSongKey(songId: song.id, artist: song.artist, title: song.title);
+      final currentOffset = _ref.read(songOffsetProvider)[songKey] ??
+          _ref.read(settingsProvider).lyricsSyncOffset;
       final currentSeek = _ref.read(settingsProvider).floatingOverlaySeekEnabled;
       if (!songChanged &&
           !lyricsChanged &&
@@ -157,6 +206,23 @@ class OverlayNotifier extends StateNotifier<OverlayState> {
           _lastPushedLyricsId == nextLyricsId &&
           _lastPushedOffset == currentOffset &&
           _lastPushedSeekEnabled == currentSeek) {
+        return;
+      }
+
+      // If overlay is not currently active, keep static cache updated but do not show overlay view
+      if (!state.isShowing) {
+        if (songChanged || lyricsChanged) {
+          try {
+            await MediaDetectionService.cacheOverlayLyricsStatic(
+              title: song.title,
+              artist: song.artist,
+              lrcLyrics: next.lyrics?.lrcLyrics ?? '',
+              plainLyrics: next.lyrics?.plainLyrics ?? '',
+              syncOffsetMs: currentOffset,
+              enableSeek: currentSeek,
+            );
+          } catch (_) {}
+        }
         return;
       }
 

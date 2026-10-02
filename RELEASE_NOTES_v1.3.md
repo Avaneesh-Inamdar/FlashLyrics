@@ -1,14 +1,14 @@
-# FlashLyrics v1.3.0 - Coming Soon
-
-A brand new version of FlashLyrics (v1.3.0) will be available in 2–3 days, alongside the official Google Play Store release.
-
+# FlashLyrics v1.3.0
+ 
+A brand new version of FlashLyrics (v1.3.0) is now officially available on the [Google Play Store](https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN) and GitHub Releases.
+ 
 ---
-
+ 
 ### Release Notice
-The updated APK is currently being prepared for the official Google Play Store launch with an updated release key. Downloads will be available here on GitHub and directly on the Google Play Store in 2–3 days.
-
+FlashLyrics is now officially live on Google Play! Downloads are available directly on the [Google Play Store](https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN) and as APK releases here on GitHub.
+ 
 ### Note for Existing Users (v1.2.0 or earlier)
-When v1.3.0 is released, please make sure to uninstall your current version first before installing, as the new release uses the official Google Play Store signing key.
+If upgrading from v1.2.0 or earlier, please make sure to uninstall your current version first before installing, as the new release uses the official Google Play Store signing key.
 
 ---
 

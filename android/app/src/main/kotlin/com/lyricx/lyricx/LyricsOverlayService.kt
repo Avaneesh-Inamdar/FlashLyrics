@@ -234,6 +234,10 @@ class LyricsOverlayService : Service() {
     }
 
     private fun showOverlay(title: String, artist: String, currentLine: String, fullLyrics: String, lrcContent: String = "", lrcSyncOffset: Long = 0, enableSeek: Boolean = OverlayLyricsCache.seekEnabled) {
+        if (MainActivity.isAppInForeground) {
+            Log.d(TAG, "MainActivity is in foreground, overlay view will not be attached")
+            return
+        }
         if (!Settings.canDrawOverlays(this)) {
             Log.w(TAG, "No overlay permission, cannot show")
             stopSelf()

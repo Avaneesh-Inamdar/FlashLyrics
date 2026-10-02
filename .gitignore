@@ -46,6 +46,7 @@ app.*.map.json
 /android/build/
 /android/.gradle/
 *.apk
+*.aab
 
 
 # Security - Never commit these files

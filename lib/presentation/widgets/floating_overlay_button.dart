@@ -6,6 +6,7 @@ import '../providers/media_provider.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/overlay_provider.dart';
+import '../providers/song_offset_provider.dart';
 import '../../services/media_detection_service.dart';
 
 /// Small floating button that appears when music is playing
@@ -123,14 +124,16 @@ class _FloatingLyricsButtonState extends ConsumerState<FloatingLyricsButton> {
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryColor, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
               onPressed: () async {
-                final current = _getCurrentLine(media.currentPosition, settings.lyricsSyncOffset);
+                final songKey = generateSongKey(songId: lyrics.songId, artist: song.artist, title: song.title);
+                final effectiveOffset = ref.read(songOffsetProvider)[songKey] ?? settings.lyricsSyncOffset;
+                final current = _getCurrentLine(media.currentPosition, effectiveOffset);
                 final ok = await ref.read(overlayProvider.notifier).show(
                       title: song.title,
                       artist: song.artist,
                       plainLyrics: lyrics.plainLyrics,
                       currentLine: current,
                       lrcLyrics: lyrics.lrcLyrics ?? '',
-                      syncOffsetMs: settings.lyricsSyncOffset,
+                      syncOffsetMs: effectiveOffset,
                       enableSeek: settings.floatingOverlaySeekEnabled,
                     );
                 if (!ok && context.mounted) {

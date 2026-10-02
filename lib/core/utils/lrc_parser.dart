@@ -176,16 +176,68 @@ class LrcParser {
     return lrc.lines.map((l) => l.text).join('\n');
   }
 
-  /// Strip all LRC timestamp tags from a line or block of text
-  /// e.g. "[00:12.34]Hello [00:15.00]world" -> "Hello world"
+  static final RegExp _generalTimeTagPattern = RegExp(
+    r'\[\s*\d{1,2}:\d{2}|<\s*\d{1,2}:\d{2}|\(\s*\d{1,2}:\d{2}|^\s*(?:\d{1,2}:)?\d{1,2}:\d{2}',
+    multiLine: true,
+  );
+
+  /// Strip all LRC and audio timestamp tags, word-level markers, and timing numbers
+  /// from a line or block of text so only pure lyrics remain.
+  /// Handles:
+  /// - Standard LRC timestamps: [00:12.34], [00:12.345], [0:12.34], [01:02:03.45]
+  /// - Colons for centiseconds: [00:12:34]
+  /// - Integer minute/second timestamps: [00:12], [0:12], [01:02:03]
+  /// - Angle-bracketed word/karaoke tags: <00:12.34>, <00:12>, etc.
+  /// - Parentheses timestamps: (00:12.34), (00:12), etc.
+  /// - Leading/trailing standalone timestamps: 00:12.34, 01:23, 0:15
+  /// - LRC metadata tags: [ti:...], [ar:...], [al:...], [by:...], [offset:...], etc.
   static String stripTimeTags(String text) {
     if (text.isEmpty) return text;
-    // Remove all occurrences of [mm:ss.xx] or [mm:ss.xxx]
-    var cleaned = text.replaceAll(_timeTagPattern, '');
-    // Also remove metadata tags like [ti:...], [ar:...] etc. that may remain
-    cleaned = cleaned.replaceAll(_metaTagPattern, '');
-    // Remove any residual brackets that look like timestamps but with single digit
-    cleaned = cleaned.replaceAll(RegExp(r'\[\d{1,2}:\d{2}(\.\d{1,3})?\]'), '');
+    var cleaned = text;
+
+    // 1. Remove bracketed timestamps: [mm:ss], [mm:ss.xx], [mm:ss:xx], [hh:mm:ss], [hh:mm:ss.xx]
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\[\s*\d{1,2}:\d{2}(?:[:.]\d{1,3})?(?:[:.]\d{1,3})?\s*\]'),
+      '',
+    );
+
+    // 2. Remove angle-bracketed timestamps / word-sync tags: <mm:ss.xx>, etc.
+    cleaned = cleaned.replaceAll(
+      RegExp(r'<\s*\d{1,2}:\d{2}(?:[:.]\d{1,3})?(?:[:.]\d{1,3})?\s*>'),
+      '',
+    );
+
+    // 3. Remove parenthesis timestamps: (mm:ss.xx), (mm:ss), etc.
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\(\s*\d{1,2}:\d{2}(?:[:.]\d{1,3})?(?:[:.]\d{1,3})?\s*\)'),
+      '',
+    );
+
+    // 4. Remove metadata tags: [ti:...], [ar:...], [al:...], [by:...], [offset:...], etc.
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\[[a-zA-Z]+:[^\]]*\]'),
+      '',
+    );
+
+    // 5. Remove any leftover bracketed/angle-bracketed timing blocks containing colons & numbers
+    cleaned = cleaned.replaceAll(RegExp(r'\[\s*[\d:.]+\s*\]'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'<\s*[\d:.]+\s*>'), '');
+
+    // 6. Remove leading unbracketed timestamps at the start of a line (e.g. "01:23 ", "00:01:23 ", "01:23.45 ")
+    cleaned = cleaned.replaceAll(
+      RegExp(r'^\s*(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.:]\d{1,3})?\s*'),
+      '',
+    );
+
+    // 7. Remove trailing unbracketed timestamps (e.g. " 01:23")
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.:]\d{1,3})?\s*$'),
+      '',
+    );
+
+    // 8. Collapse consecutive spaces to single space
+    cleaned = cleaned.replaceAll(RegExp(r'[ \t]+'), ' ');
+
     return cleaned.trim();
   }
 
@@ -196,7 +248,7 @@ class LrcParser {
 
   /// Detect if text likely contains LRC timestamps
   static bool containsTimeTags(String text) {
-    return _timeTagPattern.hasMatch(text);
+    return _timeTagPattern.hasMatch(text) || _generalTimeTagPattern.hasMatch(text);
   }
 
   /// Convert any raw lyrics (possibly LRC) to clean plain text without timestamps

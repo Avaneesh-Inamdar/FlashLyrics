@@ -15,13 +15,21 @@ class LyricsImageGenerator {
     required bool isDark,
   }) async {
     try {
+      // Strip any timestamps and filter to only non-empty selected lyrics lines
+      final cleanedLines = lines
+          .map((line) => LrcParser.stripTimeTags(line))
+          .where((line) => line.trim().isNotEmpty)
+          .toList();
+
+      if (cleanedLines.isEmpty) return null;
+
       const double width = 1080.0;
       const double padding = 56.0;
       const double lineHeight = 56.0;
       const double coverSize = 160.0;
       const double headerH = 200.0;
       const double footerH = 80.0;
-      final double contentH = lines.length * lineHeight;
+      final double contentH = cleanedLines.length * lineHeight;
       final double height = headerH + contentH + footerH + padding * 2;
 
       final ui.Image? coverImage = await _loadCoverImage(song);
@@ -82,13 +90,12 @@ class LyricsImageGenerator {
         Paint()..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.10),
       );
 
-      // Lyrics lines — centered
+      // Lyrics lines — centered, pure lyrics only without timestamps
       double y = headerH + padding + 8;
-      for (final rawLine in lines) {
-        final cleaned = LrcParser.stripTimeTags(rawLine);
+      for (final text in cleanedLines) {
         _drawText(
           canvas: canvas,
-          text: cleaned,
+          text: text,
           x: padding, y: y,
           fontSize: 32,
           color: isDark ? Colors.white : const Color(0xFF1A1A1A),
@@ -105,8 +112,6 @@ class LyricsImageGenerator {
           Paint()..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08));
       _drawText(canvas: canvas, text: 'Shared via FlashLyrics', x: padding, y: footerY + 20,
           fontSize: 22, color: const Color(0xFF10B981), weight: FontWeight.w600, maxWidth: 600);
-      _drawText(canvas: canvas, text: '${DateTime.now().year}', x: width - padding - 80, y: footerY + 20,
-          fontSize: 20, color: albumColor, weight: FontWeight.w400, maxWidth: 100);
 
       // Encode
       final picture = recorder.endRecording();

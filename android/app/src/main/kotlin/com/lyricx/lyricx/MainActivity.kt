@@ -13,10 +13,12 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.view.WindowManager
+import androidx.activity.enableEdgeToEdge
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -26,18 +28,24 @@ import java.io.FileOutputStream
 /**
  * Main Activity with Flutter method channel integration for media detection.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     
     companion object {
         private const val TAG = "MainActivity"
         private const val METHOD_CHANNEL = "com.lyricx/media"
         private const val EVENT_CHANNEL = "com.lyricx/media_events"
+        @Volatile var isAppInForeground: Boolean = false
+            private set
     }
     
     private var eventSink: EventChannel.EventSink? = null
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
         MusicNotificationManager.createNotificationChannel(this)
         MusicNotificationManager.ensureListenerBound(this)
         // Restore overlay cache from prefs
@@ -177,11 +185,37 @@ class MainActivity : FlutterActivity() {
                         val lrc = call.argument<String>("lrcLyrics") ?: call.argument<String>("lrc") ?: ""
                         val offset = (call.argument<Int>("syncOffsetMs") ?: 0)
                         val seekEnabled = call.argument<Boolean>("enableSeek") ?: false
-                        showLyricsOverlay(title, artist, lyrics, currentLine, lrc, offset, seekEnabled)
-                        result.success(true)
+
+                        // Always keep cache updated
+                        OverlayLyricsCache.update(title, artist, lrc, lyrics, offset, seekEnabled)
+                        try {
+                            getSharedPreferences("overlay_cache", Context.MODE_PRIVATE).edit()
+                                .putString("title", title)
+                                .putString("artist", artist)
+                                .putString("lrc", lrc)
+                                .putString("plain", lyrics)
+                                .putInt("offset", offset)
+                                .putBoolean("seekEnabled", seekEnabled)
+                                .apply()
+                        } catch (_: Exception) {}
+
+                        if (appIsInForeground) {
+                            // When app is in foreground, DO NOT show floating window on top of the app!
+                            // Preserve overlay state so onPause() restores it when the app goes to background
+                            overlayWasShowingBeforeForeground = true
+                            if (LyricsOverlayService.isOverlayShowing) {
+                                hideLyricsOverlay()
+                            }
+                            Log.d(TAG, "showOverlay called while app in foreground: cached lyrics and deferred display until backgrounded")
+                            result.success(true)
+                        } else {
+                            showLyricsOverlay(title, artist, lyrics, currentLine, lrc, offset, seekEnabled)
+                            result.success(true)
+                        }
                     }
                 }
                 "hideOverlay" -> {
+                    overlayWasShowingBeforeForeground = false
                     hideLyricsOverlay()
                     result.success(true)
                 }
@@ -779,27 +813,26 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         appIsInForeground = true
+        isAppInForeground = true
         MusicNotificationManager.ensureListenerBound(this)
         // If overlay is currently showing, hide it while the app is visible
         if (LyricsOverlayService.isOverlayShowing) {
             overlayWasShowingBeforeForeground = true
             hideLyricsOverlay()
             Log.d(TAG, "App foregrounded — overlay hidden temporarily")
-        } else {
-            overlayWasShowingBeforeForeground = false
         }
     }
 
     override fun onPause() {
         super.onPause()
         appIsInForeground = false
+        isAppInForeground = false
         // Re-show overlay when app goes to background, if it was showing before and music is playing
         if (overlayWasShowingBeforeForeground) {
             val isPlaying = MediaNotificationListener.currentIsPlaying
-            val title = MediaNotificationListener.currentTitle
-            val artist = MediaNotificationListener.currentArtist
-            if (isPlaying && !title.isNullOrEmpty() && !artist.isNullOrEmpty() &&
-                checkOverlayPermission()) {
+            val title = MediaNotificationListener.currentTitle?.takeIf { it.isNotEmpty() } ?: OverlayLyricsCache.title
+            val artist = MediaNotificationListener.currentArtist?.takeIf { it.isNotEmpty() } ?: OverlayLyricsCache.artist
+            if (!title.isNullOrEmpty() && !artist.isNullOrEmpty() && checkOverlayPermission()) {
                 val lrc = OverlayLyricsCache.lrc
                 val plain = OverlayLyricsCache.plain
                 val offset = OverlayLyricsCache.syncOffsetMs
@@ -809,6 +842,12 @@ class MainActivity : FlutterActivity() {
             }
             overlayWasShowingBeforeForeground = false
         }
+    }
+
+    override fun onDestroy() {
+        appIsInForeground = false
+        isAppInForeground = false
+        super.onDestroy()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {

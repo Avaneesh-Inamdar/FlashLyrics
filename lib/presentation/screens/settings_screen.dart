@@ -312,7 +312,7 @@ class SettingsScreen extends ConsumerWidget {
                         _buildSwitchTile(
                           context,
                           icon: Icons.ad_units_rounded,
-                          title: 'Show Ads',
+                          title: 'Turn Ads On/Off',
                           subtitle: 'Display banner ads to support development',
                           value: settings.enableAds,
                           onChanged: (value) {
@@ -321,22 +321,6 @@ class SettingsScreen extends ConsumerWidget {
                                 .setEnableAds(value);
                           },
                         ),
-                        if (settings.enableAds) ...[
-                          _buildDivider(context),
-                          _buildSwitchTile(
-                            context,
-                            icon: Icons.developer_mode_rounded,
-                            title: 'Sample Test Ads',
-                            subtitle:
-                                'Display Google test banner (recommended until AdMob account is approved)',
-                            value: settings.useTestAds,
-                            onChanged: (value) {
-                              ref
-                                  .read(settingsProvider.notifier)
-                                  .setUseTestAds(value);
-                            },
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -357,6 +341,26 @@ class SettingsScreen extends ConsumerWidget {
                           icon: Icons.info_outline_rounded,
                           title: 'App Version',
                           subtitle: 'v${AppConstants.appVersion}',
+                        ),
+                        _buildDivider(context),
+                        _buildTapTile(
+                          context,
+                          icon: Icons.star_rate_rounded,
+                          title: 'Rate on Google Play',
+                          subtitle: 'Leave a review or feedback',
+                          onTap: () async {
+                            final uri = Uri.parse(
+                              'https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN',
+                            );
+                            try {
+                              await launchUrl(
+                                uri,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } catch (e) {
+                              debugPrint('Could not launch Play Store: $e');
+                            }
+                          },
                         ),
                         _buildDivider(context),
                         _buildTapTile(

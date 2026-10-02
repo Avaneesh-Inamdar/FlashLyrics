@@ -49,6 +49,9 @@ android {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -61,14 +64,18 @@ android {
         checkReleaseBuilds = false
     }
     
-    // Disable NDK
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            useLegacyPackaging = false
         }
     }
+}
+
+dependencies {
+    implementation("androidx.activity:activity-ktx:1.9.3")
 }
 
 flutter {
     source = "../.."
 }
+

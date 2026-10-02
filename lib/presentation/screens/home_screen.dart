@@ -8,6 +8,7 @@ import '../../services/media_detection_service.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/song_offset_provider.dart';
 import '../widgets/lyrics_display.dart';
 import '../widgets/song_card.dart';
 import '../widgets/song_controls.dart';
@@ -82,14 +83,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (next.lyrics != null && next.currentSong != null) {
         final lrc = next.lyrics!.lrcLyrics ?? '';
         final plain = next.lyrics!.plainLyrics;
-        // Use fresh settings to avoid stale capture
         final s = ref.read(settingsProvider);
+        final song = next.currentSong!;
+        final songKey = generateSongKey(songId: next.lyrics?.songId, artist: song.artist, title: song.title);
+        final effectiveOffset = ref.read(songOffsetProvider)[songKey] ?? s.lyricsSyncOffset;
         MediaDetectionService.cacheOverlayLyricsStatic(
-          title: next.currentSong!.title,
-          artist: next.currentSong!.artist,
+          title: song.title,
+          artist: song.artist,
           lrcLyrics: lrc,
           plainLyrics: plain,
-          syncOffsetMs: s.lyricsSyncOffset,
+          syncOffsetMs: effectiveOffset,
           enableSeek: s.floatingOverlaySeekEnabled,
         );
       }
@@ -103,12 +106,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (cur.lyrics != null && cur.currentSong != null) {
           final lrc = cur.lyrics!.lrcLyrics ?? '';
           final plain = cur.lyrics!.plainLyrics;
+          final song = cur.currentSong!;
+          final songKey = generateSongKey(songId: cur.lyrics?.songId, artist: song.artist, title: song.title);
+          final effectiveOffset = ref.read(songOffsetProvider)[songKey] ?? next.lyricsSyncOffset;
           MediaDetectionService.cacheOverlayLyricsStatic(
-            title: cur.currentSong!.title,
-            artist: cur.currentSong!.artist,
+            title: song.title,
+            artist: song.artist,
             lrcLyrics: lrc,
             plainLyrics: plain,
-            syncOffsetMs: next.lyricsSyncOffset,
+            syncOffsetMs: effectiveOffset,
             enableSeek: next.floatingOverlaySeekEnabled,
           );
         } else if (seekChanged) {
