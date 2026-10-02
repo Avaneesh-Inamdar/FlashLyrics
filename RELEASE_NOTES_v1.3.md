@@ -12,7 +12,7 @@ If upgrading from v1.2.0 or earlier, please make sure to uninstall your current 
 
 ---
 
-### What's Coming in v1.3.0
+### What's New in v1.3.0
 - **Floating Lyrics Overlay Window**: Always-on-top lyrics widget over Spotify, YouTube Music, Apple Music, and more with real-time scrolling, tap-to-seek, and fluid multidirectional resizing.
 - **Instant Skeleton Loading**: Smooth skeleton transition effect in the floating overlay as soon as tracks switch.
 - **Now Playing Media Notification**: Persistent notification keeping track info accessible with a 1-tap "Float" button to summon the floating lyrics instantly without opening the full app.
@@ -22,4 +22,8 @@ If upgrading from v1.2.0 or earlier, please make sure to uninstall your current 
 - **Ad-Supported with Toggle**: Non-intrusive banner ads with a one-click toggle in Settings to turn off anytime.
 - **Google Play Store Launch**: Official distribution on Google Play Store.
 
-Stay tuned.
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN" target="_blank">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="50">
+  </a>
+</p>
