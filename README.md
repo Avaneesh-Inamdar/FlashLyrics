@@ -18,12 +18,6 @@ Android app that detects what song you're playing and shows the lyrics. Works wi
 
 Get FlashLyrics directly from the **Google Play Store**:
 
-<p align="center">
-  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN" target="_blank">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="60">
-  </a>
-</p>
-
 You can also download release APKs directly from [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases).
 
 > **Important Note for Existing Users (v1.2.0 or earlier)**:
