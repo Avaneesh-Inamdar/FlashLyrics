@@ -354,7 +354,8 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
           Icon(Icons.sync_rounded, size: 14, color: AppTheme.successColor),
           const SizedBox(width: 6),
           Text(
-            'Synced Lyrics Available',
+            widget.lyrics.lrcLyrics?.contains(RegExp(r'<\d{1,3}:\d{2}')) == true
+                ? 'Word by word' : 'Line by line',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -648,7 +649,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
 
   Widget _buildSyncedLyrics() {
     // Dynamic height based on font size (larger fonts need more space)
-    final dynamicHeight = 400 + (_syncedFontSize - 14) * 8;
+    final dynamicHeight = MediaQuery.sizeOf(context).height * 0.43;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final settings = ref.watch(settingsProvider);
     final songOffsets = ref.watch(songOffsetProvider);
@@ -669,7 +670,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         : AppTheme.lightSurfaceLight;
 
     return Container(
-      height: dynamicHeight.clamp(400.0, 600.0),
+      height: dynamicHeight.clamp(260.0, 480.0),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(20),

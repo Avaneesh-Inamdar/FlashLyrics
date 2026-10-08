@@ -143,7 +143,7 @@ class _SongCardState extends State<SongCard> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           decoration: BoxDecoration(
             color: surfaceColor,
             borderRadius: BorderRadius.circular(20),
@@ -157,7 +157,7 @@ class _SongCardState extends State<SongCard> {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(10),
             child: Row(
               children: [
                 _buildAlbumArt(surfaceLight),
@@ -176,8 +176,8 @@ class _SongCardState extends State<SongCard> {
     final artworkUrl = _resolvedArtworkUrl;
 
     return Container(
-      width: 72,
-      height: 72,
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: [

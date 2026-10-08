@@ -4,7 +4,7 @@ import '../entities/lyrics.dart';
 /// Repository interface for lyrics operations
 abstract class LyricsRepository {
   /// Fetch lyrics for a song
-  Future<Lyrics> getLyrics(Song song, {List<String>? providerPriority});
+  Future<Lyrics> getLyrics(Song song, {List<String>? providerPriority, bool forceRefresh = false});
 
   /// Search lyrics by artist and title
   Future<Lyrics> searchLyrics(

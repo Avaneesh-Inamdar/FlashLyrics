@@ -1,3 +1,5 @@
+import '../datasources/genius_lyrics_datasource.dart';
+import '../../core/utils/song_key.dart';
 import '../../domain/entities/song.dart';
 import '../../domain/entities/lyrics.dart';
 import '../../domain/repositories/lyrics_repository.dart';
@@ -11,21 +13,23 @@ import '../models/lyrics_model.dart';
 class LyricsRepositoryImpl implements LyricsRepository {
   final LyricsRemoteDataSource _remoteDataSource;
   final LyricsLocalDataSource _localDataSource;
+  final GeniusLyricsDataSource? _geniusDataSource;
 
   LyricsRepositoryImpl({
     required LyricsRemoteDataSource remoteDataSource,
     required LyricsLocalDataSource localDataSource,
+    GeniusLyricsDataSource? geniusDataSource,
   }) : _remoteDataSource = remoteDataSource,
-       _localDataSource = localDataSource;
+       _localDataSource = localDataSource,
+       _geniusDataSource = geniusDataSource;
 
   @override
-  Future<Lyrics> getLyrics(Song song, {List<String>? providerPriority}) async {
+  Future<Lyrics> getLyrics(Song song, {List<String>? providerPriority, bool forceRefresh = false}) async {
     // Generate consistent songId from artist/title (same as searchLyrics)
-    final songId = _generateSongId(song.artist, song.title);
 
     // Check cache only if it matches the exact song
-    final cachedLyrics = _localDataSource.getCachedLyrics(songId);
-    if (cachedLyrics != null) {
+    final cachedLyrics = _findCached(artist: song.artist, title: song.title);
+    if (!forceRefresh && cachedLyrics != null) {
       // Return cached synced lyrics immediately
       if (cachedLyrics.isSynced) return cachedLyrics;
       // Return cached unsynced, but don't block - upgrade can happen next time
@@ -33,11 +37,13 @@ class LyricsRepositoryImpl implements LyricsRepository {
     }
 
     // ONE parallel blast of ALL APIs at once, respecting user provider priority
-    final lyrics = await _remoteDataSource.fetchAllParallel(
+    var lyrics = await _remoteDataSource.fetchAllParallel(
       song.artist,
       song.title,
       providerPriority: providerPriority,
     );
+
+    lyrics ??= await _geniusDataSource?.findExact(song.artist, song.title);
 
     if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
       await _localDataSource.cacheLyrics(lyrics);
@@ -55,20 +61,21 @@ class LyricsRepositoryImpl implements LyricsRepository {
     String title, {
     List<String>? providerPriority,
   }) async {
-    final songId = _generateSongId(artist, title);
 
     // First check cache
-    final cachedLyrics = _localDataSource.getCachedLyrics(songId);
+    final cachedLyrics = _findCached(artist: artist, title: title);
     if (cachedLyrics != null) {
       return cachedLyrics;
     }
 
     // ONE parallel blast of ALL APIs
-    final lyrics = await _remoteDataSource.fetchAllParallel(
+    var lyrics = await _remoteDataSource.fetchAllParallel(
       artist,
       title,
       providerPriority: providerPriority,
     );
+
+    lyrics ??= await _geniusDataSource?.findExact(artist, title);
 
     if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
       await _localDataSource.cacheLyrics(lyrics);
@@ -114,10 +121,15 @@ class LyricsRepositoryImpl implements LyricsRepository {
     return _localDataSource.searchCachedLyrics(query);
   }
 
-  String _generateSongId(String artist, String title) {
-    return '${artist}_$title'
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '_')
-        .replaceAll(RegExp(r'_+'), '_');
+  LyricsModel? _findCached({required String artist, required String title}) {
+    final key = songKey(artist, title);
+    final exact = _localDataSource.getCachedLyrics(key);
+    if (exact != null) return exact;
+    // Recover legacy entries by metadata without trusting colliding old keys.
+    for (final entry in _localDataSource.getAllCachedLyrics()) {
+      if (entry.artistName != null && entry.trackName != null &&
+          songKey(entry.artistName!, entry.trackName!) == key) return entry;
+    }
+    return null;
   }
 }

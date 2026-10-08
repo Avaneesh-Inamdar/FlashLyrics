@@ -1,3 +1,4 @@
+import 'genius_lyrics_screen.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
@@ -23,7 +24,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _isSearching = false;
   List<SearchResult> _results = [];
   String? _error;
-  String _lastQuery = '';
   int _searchId = 0; // Track search requests to cancel stale ones
   Timer? _debounceTimer;
   List<String> _history = [];
@@ -71,14 +71,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _onSearchChanged() {
     final query = _searchController.text.trim();
-    setState(() {}); // Update UI for clear button
+    ++_searchId; // Invalidate in-flight results as soon as the query changes.
+    setState(() { _isSearching = false; });
 
     if (query.isEmpty) {
       _debounceTimer?.cancel();
       setState(() {
         _results = [];
         _error = null;
-        _lastQuery = '';
       });
       return;
     }
@@ -90,7 +90,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
 
     // Debounce: cancel previous timer and wait 450ms before searching
-    _lastQuery = query;
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 450), () {
       if (mounted && _searchController.text.trim() == query) {
@@ -137,6 +136,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
+              child: Row(children: [
+                Expanded(child: Text('Find your words.', style: Theme.of(context).textTheme.headlineMedium)),
+                IconButton(tooltip: 'Find lyrics on Genius', icon: const Icon(Icons.travel_explore),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => GeniusLyricsScreen(query: _searchController.text.trim())))),
+              ]),
+            ),
             _buildSearchHeader(
               isDark,
               surfaceLight,
@@ -197,6 +205,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 enableInteractiveSelection: true,
                 mouseCursor: SystemMouseCursors.text,
                 decoration: InputDecoration(
+                  filled: false,
                   hintText: 'Search for a song...',
                   hintStyle: TextStyle(color: textHint),
                   prefixIcon: Icon(Icons.search_rounded, color: textHint),
@@ -587,9 +596,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Try searching with different keywords',
+              "Try another spelling, or look on an artist's page.",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: textSecondary),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => GeniusLyricsScreen(query: _searchController.text.trim()))),
+              icon: const Icon(Icons.travel_explore),
+              label: const Text('Search Genius'),
             ),
           ],
         ),
@@ -900,6 +916,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         final key = '${m.source.toLowerCase()}|${m.songId}';
         if (seen.add(key)) filtered.add(m);
       }
+      if (!mounted || thisSearchId != _searchId) return;
       _saveToHistory(query);
 
       // Sort by synced + effective priority (respects user filter)

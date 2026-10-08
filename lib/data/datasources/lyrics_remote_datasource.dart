@@ -1,7 +1,8 @@
+import '../../core/utils/song_key.dart';
 import 'dart:async';
+import '../../core/utils/word_lyrics.dart';
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/errors/exceptions.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../models/lyrics_model.dart';
 
@@ -324,7 +325,7 @@ class LyricsRemoteDataSource {
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data as Map<String, dynamic>;
         final plainLyrics = data['plainLyrics'] as String? ?? '';
-        final syncedLyrics = data['syncedLyrics'] as String?;
+        final syncedLyrics = wordSyncedLrc(data);
 
         if (plainLyrics.isEmpty &&
             (syncedLyrics == null || syncedLyrics.isEmpty)) {
@@ -376,13 +377,14 @@ class LyricsRemoteDataSource {
           final title = map['trackName'] as String? ?? '';
           final album = map['albumName'] as String?;
           final songId = _generateSongId(artist, title);
+          final synced = wordSyncedLrc(map);
 
           return LyricsModel(
             id: '${songId}_${map['id']}',
             songId: songId,
             plainLyrics: map['plainLyrics'] as String? ?? '',
-            lrcLyrics: map['syncedLyrics'] as String?,
-            isSynced: map['syncedLyrics'] != null,
+            lrcLyrics: synced,
+            isSynced: synced != null && synced.isNotEmpty,
             source: 'LRCLIB',
             fetchedAt: DateTime.now(),
             artistName: artist,
@@ -725,6 +727,7 @@ class LyricsRemoteDataSource {
         futures.add(
           _safeFetch(() async {
             final results = await searchLrclib(query);
+            LyricsModel? plainMatch;
             for (final r in results) {
               // Search ordering is not a match signal.  Never let a fuzzy
               // result replace the playing song unless its metadata agrees.
@@ -740,19 +743,13 @@ class LyricsRemoteDataSource {
               if (r.isSynced && r.lrcLyrics != null) {
                 return r;
               }
+              plainMatch ??= r;
             }
-            return null;
+            return plainMatch;
           }),
         );
       }
     }
-
-    // Fire ALL at once with 15 second timeout per call
-    final results = await Future.wait(
-      futures.map(
-        (f) => f.timeout(const Duration(seconds: 15), onTimeout: () => null),
-      ),
-    );
 
     // Rank results by (synced first) then provider priority
     int providerIndexFor(LyricsModel m) {
@@ -775,6 +772,41 @@ class LyricsRemoteDataSource {
       final idx = effectivePriority.indexOf(id);
       return idx == -1 ? 999 : idx;
     }
+
+    // Return promptly instead of waiting for the slowest/unavailable provider.
+    // Give preferred providers a brief grace period once any verified match exists.
+    final completed = Completer<List<LyricsModel?>>();
+    final received = <LyricsModel?>[];
+    var remaining = futures.length;
+    Timer? grace;
+    void finish() {
+      if (!completed.isCompleted) completed.complete(List.of(received));
+    }
+    final deadline = Timer(const Duration(seconds: 8), finish);
+    for (final future in futures) {
+      future.then((result) {
+        if (completed.isCompleted) return;
+        remaining--;
+        if (result != null && result.plainLyrics.trim().isNotEmpty &&
+            _isGoodMatch(artist, title, result.artistName ?? '', result.trackName ?? '')) {
+          received.add(result);
+          if (providerIndexFor(result) == 0 && result.isSynced) {
+            finish();
+          } else {
+            grace ??= Timer(const Duration(milliseconds: 350), finish);
+          }
+        }
+        if (remaining == 0) finish();
+      }, onError: (Object error, StackTrace stack) {
+        if (completed.isCompleted) return;
+        remaining--;
+        if (remaining == 0) finish();
+      });
+    }
+    if (futures.isEmpty) finish();
+    final results = await completed.future;
+    deadline.cancel();
+    grace?.cancel();
 
     final valid = results
         .where(
@@ -830,26 +862,7 @@ class LyricsRemoteDataSource {
   }
 
   /// Generate consistent song ID - preserves Unicode (Hindi, etc.) to avoid collisions
-  String _generateSongId(String artist, String title) {
-    final raw = '${artist.trim()}_${title.trim()}'.toLowerCase().replaceAll(
-      RegExp(r'\s+'),
-      '_',
-    );
-    // Keep Unicode letters/numbers, replace other punctuation/symbols with _
-    // Uses Unicode property escapes to preserve Devanagari, etc.
-    try {
-      return raw
-          .replaceAll(RegExp(r'[^\p{L}\p{N}_]+', unicode: true), '_')
-          .replaceAll(RegExp(r'_+'), '_')
-          .replaceAll(RegExp(r'^_|_$'), '');
-    } catch (_) {
-      // Fallback if Unicode regex not supported
-      return raw
-          .replaceAll(RegExp(r'[^a-zA-Z0-9_\u0900-\u097F\u4E00-\u9FFF]+'), '_')
-          .replaceAll(RegExp(r'_+'), '_')
-          .replaceAll(RegExp(r'^_|_$'), '');
-    }
-  }
+  String _generateSongId(String artist, String title) => songKey(artist, title);
 
   /// Check if fetched result matches requested song (avoid random mismatched lyrics)
   /// For Devanagari (Hindi) we are lenient due to transliteration variations, but still require title similarity
@@ -936,6 +949,7 @@ class LyricsRemoteDataSource {
       // Remove timestamp [mm:ss.xx] from beginning
       final text = line
           .replaceAll(RegExp(r'^\[\d{2}:\d{2}\.\d{2,3}\]'), '')
+          .replaceAll(RegExp(r'<\d{1,3}:\d{2}(?:\.\d{1,3})?>'), '')
           .trim();
       if (text.isNotEmpty && !text.startsWith('[')) {
         buffer.writeln(text);

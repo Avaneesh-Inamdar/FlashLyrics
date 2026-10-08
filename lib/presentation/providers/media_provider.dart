@@ -58,6 +58,9 @@ class MediaNotifier extends StateNotifier<MediaState> {
   StreamSubscription? _songSubscription;
   StreamSubscription? _playbackSubscription;
   StreamSubscription? _positionSubscription;
+  Timer? _lyricsRetryTimer;
+  int _lyricsRetries = 0;
+  late final void Function() _removeLyricsListener;
 
   MediaNotifier({
     required MediaDetectionService service,
@@ -66,6 +69,10 @@ class MediaNotifier extends StateNotifier<MediaState> {
        _lyricsNotifier = lyricsNotifier,
        super(const MediaState()) {
     if (kDebugMode) debugPrint('🟢 MediaNotifier CREATED');
+    _removeLyricsListener = _lyricsNotifier.addListener(
+      (_) => _scheduleLyricsRecovery(),
+      fireImmediately: false,
+    );
     _initialize();
   }
 
@@ -78,6 +85,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
   Future<void> checkPermissions() async {
     final hasPermission = await MediaDetectionService.checkNotificationAccess();
     final isRunning = await MediaDetectionService.isServiceRunning();
+    if (!mounted) return;
     if (kDebugMode) {
       debugPrint(
         '🔑 checkPermissions: hasPermission=$hasPermission, isRunning=$isRunning, isListening=${state.isListening}',
@@ -119,21 +127,14 @@ class MediaNotifier extends StateNotifier<MediaState> {
     );
 
     if (refreshLyrics) {
-      // Only force-refresh if it's a DIFFERENT song than what we already have lyrics for
-      final currentId = state.currentSong?.id;
-      final existingLyricsId = _lyricsNotifier.state.currentSong?.id;
-      final hasLyrics = _lyricsNotifier.state.lyrics != null;
-
-      if (currentId != existingLyricsId || !hasLyrics) {
-        await _lyricsNotifier.setSong(song, forceRefresh: true);
-      }
+      // Explicit refresh also upgrades cached line lyrics to word timings.
+      await _lyricsNotifier.setSong(song, forceRefresh: true);
     }
   }
 
   /// Start listening for media updates
   Future<void> startListening() async {
     if (kDebugMode) debugPrint('▶️ MediaNotifier.startListening() called');
-    _service.startListening();
 
     _songSubscription?.cancel();
     _songSubscription = _service.songStream.listen(_onSongDetected);
@@ -144,6 +145,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
     _positionSubscription?.cancel();
     _positionSubscription = _service.positionStream.listen(_onPositionUpdate);
 
+    _service.startListening();
     state = state.copyWith(isListening: true);
 
     // Try to get the currently playing song on startup
@@ -160,6 +162,8 @@ class MediaNotifier extends StateNotifier<MediaState> {
 
   /// Stop listening
   void stopListening() {
+    _lyricsRetryTimer?.cancel();
+    _lyricsRetryTimer = null;
     _service.stopListening();
     _songSubscription?.cancel();
     _playbackSubscription?.cancel();
@@ -170,12 +174,14 @@ class MediaNotifier extends StateNotifier<MediaState> {
   void _onSongDetected(Song song) {
     // Only update if song changed
     if (state.currentSong?.id != song.id) {
+      _lyricsRetryTimer?.cancel();
+      _lyricsRetryTimer = null;
+      _lyricsRetries = 0;
       if (kDebugMode) {
         debugPrint('🎵 New song detected: ${song.title} by ${song.artist}');
       }
 
-      // IMPORTANT: Clear old lyrics first to prevent mixing
-      _lyricsNotifier.clear();
+      // setSong clears old lyrics and coalesces an existing lookup.
 
       // Reset position for new song
       state = state.copyWith(
@@ -191,10 +197,37 @@ class MediaNotifier extends StateNotifier<MediaState> {
       }
       _lyricsNotifier.setSong(song);
     }
+    _scheduleLyricsRecovery();
+  }
+
+  bool get _needsLyricsRecovery {
+    if (!mounted || !state.isListening || !state.isPlaying) return false;
+    final lyrics = _lyricsNotifier.state;
+    return state.currentSong != null &&
+        lyrics.currentSong?.id == state.currentSong!.id &&
+        !lyrics.isLoading && lyrics.lyrics == null && lyrics.error != null;
+  }
+
+  // A transient failure during an ad must not leave the same song stuck.
+  // Keep retries bounded, and never replace a manual search selection.
+  void _scheduleLyricsRecovery() {
+    if (!_needsLyricsRecovery) {
+      _lyricsRetryTimer?.cancel();
+      _lyricsRetryTimer = null;
+      return;
+    }
+    if (_lyricsRetryTimer != null || _lyricsRetries >= 2) return;
+    _lyricsRetryTimer = Timer(Duration(seconds: _lyricsRetries == 0 ? 2 : 5), () {
+      _lyricsRetryTimer = null;
+      if (!_needsLyricsRecovery) return;
+      _lyricsRetries++;
+      _lyricsNotifier.setSong(state.currentSong!);
+    });
   }
 
   void _onPlaybackChanged(bool isPlaying) {
     state = state.copyWith(isPlaying: isPlaying);
+    _scheduleLyricsRecovery();
   }
 
   void _onPositionUpdate(PlaybackPosition position) {
@@ -203,6 +236,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
       currentDuration: position.duration,
       isPlaying: position.isPlaying,
     );
+    _scheduleLyricsRecovery();
   }
 
   /// Seek to a specific position in the current song
@@ -224,6 +258,8 @@ class MediaNotifier extends StateNotifier<MediaState> {
 
   @override
   void dispose() {
+    _removeLyricsListener();
+    _lyricsRetryTimer?.cancel();
     _songSubscription?.cancel();
     _playbackSubscription?.cancel();
     _positionSubscription?.cancel();

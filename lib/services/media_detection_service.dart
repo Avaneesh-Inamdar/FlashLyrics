@@ -293,10 +293,14 @@ class MediaDetectionService {
     _pollTimer?.cancel();
     if (kDebugMode) debugPrint('📡 POLLING: Started (every ${_pollInterval.inMilliseconds}ms)');
     int pollCount = 0;
+    bool pollInFlight = false;
     _pollTimer = Timer.periodic(_pollInterval, (_) async {
-      if (!_isListening) return;
+      if (!_isListening || pollInFlight) return;
+      pollInFlight = true;
+      final wasPlaying = _isPlaying;
       try {
         final song = await getCurrentPlayingSong();
+        if (!_isListening || _songController.isClosed) return;
         pollCount++;
         // Log every 20th poll to avoid spam
         if (kDebugMode && pollCount % 20 == 0) {
@@ -326,12 +330,14 @@ class MediaDetectionService {
               ),
             );
           }
-          if (!_playbackController.isClosed && _isPlaying != isPlaying) {
+          if (!_playbackController.isClosed && _isPlaying != wasPlaying) {
             _playbackController.add(_isPlaying);
           }
         }
       } catch (e) {
         if (kDebugMode) debugPrint('Polling error: $e');
+      } finally {
+        pollInFlight = false;
       }
     });
   }

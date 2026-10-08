@@ -752,7 +752,8 @@ class LyricsOverlayService : Service() {
                     lastEnd = m.end()
                 }
                 if (times.isNotEmpty() && lastEnd >= 0) {
-                    val text = line.substring(lastEnd).trim()
+                    val text = line.substring(lastEnd)
+                        .replace(Regex("<\\d{1,3}:\\d{2}(?:\\.\\d{1,3})?>"), "").trim()
                     for (ts in times) parsed.add(LrcLine(ts, text))
                 }
             }

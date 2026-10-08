@@ -1,3 +1,4 @@
+import 'genius_lyrics_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -162,14 +163,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
+          Flexible(child: Text(
             'FlashLyrics',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : AppTheme.lightTextPrimary,
-              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -1.2,
+              color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+              fontSize: 26,
             ),
-          ),
+          )),
           if (isListening) ...[
             const SizedBox(width: 10),
             _buildStatusIndicator(isPlaying),
@@ -285,7 +289,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(height: 8),
             // Song controls with seek bar + next/prev
             if (hasMediaSong)
-              Padding(
+              ExpansionTile(
+                title: const Text('Playback controls'),
+                leading: const Icon(Icons.tune_rounded),
+                dense: true,
+                tilePadding: const EdgeInsets.symmetric(horizontal: 24),
+                children: [Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Consumer(
                   builder: (context, ref, _) {
@@ -315,14 +324,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     );
                   },
                 ),
+              )],
               ),
             const SizedBox(height: 6),
-            // Floating overlay button (when song available)
-            if (lyricsState.currentSong != null && lyricsState.lyrics != null)
-              const FloatingLyricsButton(),
             const SizedBox(height: 4),
             if (lyricsState.isLoading && lyricsState.lyrics == null)
               _buildLoadingState()
+            else if (lyricsState.error == 'Lyrics not found')
+              _buildNoLyricsState()
             else if (lyricsState.error != null && lyricsState.lyrics == null)
               _buildErrorState(lyricsState.error!)
             else if (lyricsState.lyrics != null)
@@ -345,6 +354,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               )
             else
               _buildNoLyricsState(),
+            if (lyricsState.lyrics != null) const FloatingLyricsButton(),
             const SizedBox(height: 40),
           ],
         ),
@@ -701,6 +711,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onPressed: () => _showSearchDialog(context),
               icon: const Icon(Icons.search_rounded),
               label: const Text('Search manually'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () {
+                final song = ref.read(lyricsNotifierProvider).currentSong;
+                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+                  GeniusLyricsScreen(query: song == null ? '' : '${song.artist} ${song.title}')));
+              },
+              icon: const Icon(Icons.travel_explore),
+              label: const Text('Find lyrics on Genius'),
             ),
           ],
         ),

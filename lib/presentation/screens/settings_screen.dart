@@ -1,10 +1,10 @@
 import 'dart:ui';
-import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:http/http.dart' as http;
+
 
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_constants.dart';
@@ -13,6 +13,8 @@ import '../providers/settings_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/providers.dart';
 import 'licenses_screen.dart';
+import '../widgets/update_dialog.dart';
+import '../widgets/notification_tip.dart';
 
 /// Settings screen with modern glassmorphism UI
 class SettingsScreen extends ConsumerWidget {
@@ -341,6 +343,22 @@ class SettingsScreen extends ConsumerWidget {
                           icon: Icons.info_outline_rounded,
                           title: 'App Version',
                           subtitle: 'v${AppConstants.appVersion}',
+                        ),
+                        _buildDivider(context),
+                        _buildTapTile(context,
+                          icon: Icons.system_update_rounded,
+                          title: 'Check for updates',
+                          subtitle: 'Check Google Play for a newer release',
+                          onTap: () => showDialog<void>(context: context,
+                              builder: (_) => const UpdateDialog()),
+                        ),
+                        _buildDivider(context),
+                        _buildTapTile(context,
+                          icon: Icons.picture_in_picture_alt_rounded,
+                          title: 'How to use floating lyrics',
+                          subtitle: 'Find Float in your notification',
+                          onTap: () => showNotificationTip(context,
+                              ref.read(sharedPreferencesProvider), always: true),
                         ),
                         _buildDivider(context),
                         _buildTapTile(
@@ -1811,320 +1829,4 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _checkForUpdates(BuildContext context) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textPrimary = isDark
-        ? AppTheme.textPrimary
-        : AppTheme.lightTextPrimary;
-    final textSecondary = isDark
-        ? AppTheme.textSecondary
-        : AppTheme.lightTextSecondary;
-
-    // Show loading dialog
-    bool dialogOpen = true;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.surfaceColor : AppTheme.lightSurface,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(
-                'Checking for updates...',
-                style: TextStyle(color: textPrimary),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    try {
-      final response = await http
-          .get(
-            Uri.parse(
-              'https://api.github.com/repos/Avaneesh-Inamdar/FlashLyrics/releases/latest',
-            ),
-            headers: {'Accept': 'application/vnd.github.v3+json'},
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
-      dialogOpen = false;
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final latestVersion =
-            (data['tag_name'] as String?)?.replaceFirst('v', '') ?? 'Unknown';
-        final releaseUrl =
-            data['html_url'] as String? ??
-            'https://github.com/Avaneesh-Inamdar/FlashLyrics/releases';
-        final releaseNotes = data['body'] as String? ?? '';
-
-        final currentVersion = AppConstants.appVersion;
-        final isUpdateAvailable =
-            _compareVersions(latestVersion, currentVersion) > 0;
-
-        if (isUpdateAvailable) {
-          _showUpdateAvailableDialog(
-            context,
-            latestVersion,
-            releaseUrl,
-            releaseNotes,
-            isDark,
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    color: AppTheme.successColor,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text('You\'re on the latest version ($currentVersion)'),
-                ],
-              ),
-              backgroundColor: isDark
-                  ? AppTheme.surfaceLight
-                  : AppTheme.lightSurfaceLight,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
-      } else {
-        throw Exception('Failed to check for updates');
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      if (dialogOpen) {
-        Navigator.pop(context); // Close loading dialog if still showing
-        dialogOpen = false;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: AppTheme.errorColor,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Failed to check for updates: $e')),
-            ],
-          ),
-          backgroundColor: isDark
-              ? AppTheme.surfaceLight
-              : AppTheme.lightSurfaceLight,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-    }
-  }
-
-  /// Normalize a version string to always have 3 parts (major.minor.patch).
-  /// Handles formats like '1.01' (-> '1.0.1'), '1.0.1', 'v1.01', etc.
-  List<int> _normalizeVersion(String version) {
-    // Strip leading 'v' if present
-    final cleaned = version
-        .replaceFirst(RegExp(r'^v', caseSensitive: false), '')
-        .trim();
-    final parts = cleaned.split('.');
-
-    if (parts.length >= 3) {
-      // Already has 3+ parts, parse directly
-      return List.generate(
-        3,
-        (i) => i < parts.length ? (int.tryParse(parts[i]) ?? 0) : 0,
-      );
-    }
-
-    if (parts.length == 2) {
-      final major = int.tryParse(parts[0]) ?? 0;
-      final rest = parts[1];
-      // If second part has leading zero and length > 1 (e.g. '01'), treat as minor.patch
-      if (rest.length >= 2 && rest.startsWith('0')) {
-        // '1.01' -> major=1, minor=0, patch=1
-        final minor = int.tryParse(rest.substring(0, 1)) ?? 0;
-        final patch = int.tryParse(rest.substring(1)) ?? 0;
-        return [major, minor, patch];
-      }
-      // Normal 2-part version like '1.2'
-      final minor = int.tryParse(rest) ?? 0;
-      return [major, minor, 0];
-    }
-
-    // Single number
-    return [int.tryParse(cleaned) ?? 0, 0, 0];
-  }
-
-  int _compareVersions(String v1, String v2) {
-    final parts1 = _normalizeVersion(v1);
-    final parts2 = _normalizeVersion(v2);
-
-    for (var i = 0; i < 3; i++) {
-      if (parts1[i] > parts2[i]) return 1;
-      if (parts1[i] < parts2[i]) return -1;
-    }
-    return 0;
-  }
-
-  void _showUpdateAvailableDialog(
-    BuildContext context,
-    String latestVersion,
-    String releaseUrl,
-    String releaseNotes,
-    bool isDark,
-  ) {
-    final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
-    final surfaceLight = isDark
-        ? AppTheme.surfaceLight
-        : AppTheme.lightSurfaceLight;
-    final textPrimary = isDark
-        ? AppTheme.textPrimary
-        : AppTheme.lightTextPrimary;
-    final textSecondary = isDark
-        ? AppTheme.textSecondary
-        : AppTheme.lightTextSecondary;
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    surfaceColor.withValues(alpha: 0.9),
-                    surfaceLight.withValues(alpha: 0.8),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: AppTheme.successColor.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppTheme.successColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.system_update_rounded,
-                      color: AppTheme.successColor,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Update Available!',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Version $latestVersion is available',
-                    style: TextStyle(fontSize: 14, color: textSecondary),
-                  ),
-                  if (releaseNotes.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      constraints: const BoxConstraints(maxHeight: 150),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: surfaceLight.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          releaseNotes,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: textSecondary,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            'Later',
-                            style: TextStyle(color: textSecondary),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            final uri = Uri.parse(releaseUrl);
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(
-                                uri,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            }
-                            if (context.mounted) Navigator.pop(context);
-                          },
-                          icon: const Icon(Icons.download_rounded, size: 18),
-                          label: const Text('Download'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.successColor,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

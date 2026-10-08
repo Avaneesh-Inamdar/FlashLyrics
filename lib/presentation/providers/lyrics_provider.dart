@@ -1,3 +1,4 @@
+import '../../core/utils/song_key.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,6 +62,12 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   /// Set current song and fetch lyrics
   Future<void> setSong(Song song, {bool forceRefresh = false}) async {
+    final current = state.currentSong;
+    if (!forceRefresh && state.isLoading && current != null &&
+        songKey(current.artist, current.title) == songKey(song.artist, song.title)) {
+      return;
+    }
+    ++_latestSearchId;
     final requestId = ++_latestSongRequestId;
     if (kDebugMode) {
       debugPrint('🎵 Fetching lyrics for: ${song.title} by ${song.artist}');
@@ -75,26 +82,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
     try {
       // Check cache first unless forced refresh (Unicode-aware songId to avoid Hindi collisions)
-      final rawId = '${song.artist.trim()}_${song.title.trim()}'
-          .toLowerCase()
-          .replaceAll(RegExp(r'\s+'), '_');
-      String songId;
-      try {
-        songId = rawId
-            .replaceAll(RegExp(r'[^\p{L}\p{N}_]+', unicode: true), '_')
-            .replaceAll(RegExp(r'_+'), '_')
-            .replaceAll(RegExp(r'^_|_$'), '');
-      } catch (_) {
-        songId = rawId
-            .replaceAll(
-              RegExp(r'[^a-zA-Z0-9_\u0900-\u097F\u4E00-\u9FFF]+'),
-              '_',
-            )
-            .replaceAll(RegExp(r'_+'), '_')
-            .replaceAll(RegExp(r'^_|_$'), '');
-      }
-      if (songId.isEmpty)
-        songId = '${song.artist}_${song.title}'.hashCode.toString();
+      final songId = songKey(song.artist, song.title);
       if (!forceRefresh) {
         final cached = await _getCachedLyricsUseCase(songId);
         if (cached != null) {
@@ -156,6 +144,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       final lyrics =
           await _getLyricsUseCase(
             song,
+            forceRefresh: forceRefresh,
             providerPriority: _providerPriority,
           ).timeout(
             const Duration(seconds: 22),
@@ -195,6 +184,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   /// Search for lyrics manually
   Future<void> searchLyrics(String artist, String title) async {
+    ++_latestSongRequestId;
     final searchId = ++_latestSearchId; // Track this search request
     state = state.copyWith(isLoading: true, error: null, clearLyrics: true);
 
@@ -250,6 +240,8 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   /// Set lyrics directly from a LyricsModel (from search results)
   void setLyricsFromModel(LyricsModel model) {
+    ++_latestSongRequestId;
+    ++_latestSearchId;
     // Create a song from the search result metadata
     final song = Song(
       id: model.songId,
@@ -279,6 +271,8 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   /// Clear lyrics
   void clear() {
+    ++_latestSongRequestId;
+    ++_latestSearchId;
     state = const LyricsState();
   }
 }

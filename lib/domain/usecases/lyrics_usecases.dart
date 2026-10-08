@@ -8,8 +8,8 @@ class GetLyricsUseCase {
 
   GetLyricsUseCase(this._repository);
 
-  Future<Lyrics> call(Song song, {List<String>? providerPriority}) =>
-      _repository.getLyrics(song, providerPriority: providerPriority);
+  Future<Lyrics> call(Song song, {List<String>? providerPriority, bool forceRefresh = false}) =>
+      _repository.getLyrics(song, providerPriority: providerPriority, forceRefresh: forceRefresh);
 }
 
 /// Use case for searching lyrics

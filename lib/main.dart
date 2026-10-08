@@ -138,13 +138,10 @@ class _FlashLyricsAppState extends ConsumerState<FlashLyricsApp>
     // Update system UI style based on theme
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: isDark
             ? Brightness.light
             : Brightness.dark,
-        systemNavigationBarContrastEnforced: false,
       ),
     );
 

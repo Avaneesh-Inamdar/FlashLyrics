@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -38,6 +39,15 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   final ScrollController _scrollController = ScrollController();
   double _viewportPadding = 160.0;
   bool _didInitialScroll = false;
+  Timer? _wordClock;
+  int _elapsedMs = 0;
+  int _parseGeneration = 0;
+  List<double> _lineHeights = [];
+  List<double> _lineOffsets = [];
+  double _measuredWidth = -1;
+  double _measuredFont = -1;
+  Duration get _position =>
+      widget.currentPosition + Duration(milliseconds: _elapsedMs);
   static const Duration _baseSyncLeadTime = Duration(milliseconds: 800);
 
   // Track playback state for resuming scroll after theme change
@@ -58,11 +68,33 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     super.initState();
     _parseLrc();
     _wasPlaying = widget.isPlaying;
+    _startWordClock();
+  }
+
+  void _startWordClock() {
+    _wordClock?.cancel();
+    if (!widget.isPlaying) return;
+    _wordClock = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted ||
+          !TickerMode.valuesOf(context).enabled ||
+          _elapsedMs >= 1000 ||
+          !(_parsedLrc?.lines.any((line) => line.words.isNotEmpty) ?? false)) {
+        return;
+      }
+      setState(() => _elapsedMs += 100);
+      _updateCurrentLine();
+    });
   }
 
   @override
   void didUpdateWidget(SyncedLyricsDisplay oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentPosition != widget.currentPosition ||
+        oldWidget.isPlaying != widget.isPlaying ||
+        oldWidget.lrcContent != widget.lrcContent) {
+      _elapsedMs = 0;
+      _startWordClock();
+    }
 
     // Handle theme change - rebuild to update colors
     if (oldWidget.fontSize != widget.fontSize) {
@@ -83,20 +115,27 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     }
     _wasPlaying = widget.isPlaying;
 
-    if (oldWidget.currentPosition != widget.currentPosition &&
+    if ((oldWidget.currentPosition != widget.currentPosition ||
+            oldWidget.syncOffsetMs != widget.syncOffsetMs) &&
         _parsedLrc != null) {
       _updateCurrentLine();
     }
   }
 
   Future<void> _parseLrc() async {
+    final generation = ++_parseGeneration;
     final parsed = await LrcParser.parse(widget.lrcContent);
-    if (mounted) {
+    if (mounted && generation == _parseGeneration) {
       final initialIndex = parsed.getLineIndexAtTime(
-        _applyLeadTime(widget.currentPosition),
+        widget.currentPosition +
+            Duration(milliseconds: widget.syncOffsetMs) +
+            (parsed.lines.any((l) => l.words.isNotEmpty)
+                ? Duration.zero
+                : _baseSyncLeadTime),
       );
       setState(() {
         _parsedLrc = parsed;
+        _measuredWidth = -1;
         _currentLineIndex = initialIndex;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -109,9 +148,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
   void _updateCurrentLine() {
     if (_parsedLrc == null || !mounted) return;
-    final newIndex = _parsedLrc!.getLineIndexAtTime(
-      _applyLeadTime(widget.currentPosition),
-    );
+    final newIndex = _parsedLrc!.getLineIndexAtTime(_applyLeadTime(_position));
 
     if (newIndex != _currentLineIndex && mounted) {
       setState(() => _currentLineIndex = newIndex);
@@ -126,12 +163,19 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     try {
       // Calculate the target offset for the visual focus point.
       final viewportHeight = _scrollController.position.viewportDimension;
-      final focusOffset = viewportHeight * 0.44 - _itemHeight / 2;
+      final lineHeight = _lineHeights.length > _currentLineIndex
+          ? _lineHeights[_currentLineIndex]
+          : _itemHeight;
+      final focusOffset = viewportHeight * 0.28 - lineHeight / 2;
 
       // Target offset puts the current line at the same reading position
       // used for the list's top/bottom padding.
       final targetOffset =
-          (_currentLineIndex * _itemHeight) + _viewportPadding - focusOffset;
+          (_lineOffsets.length > _currentLineIndex
+              ? _lineOffsets[_currentLineIndex]
+              : _currentLineIndex * _itemHeight) +
+          _viewportPadding -
+          focusOffset;
 
       final clampedOffset = targetOffset.clamp(
         0.0,
@@ -157,7 +201,10 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   }
 
   Duration _applyLeadTime(Duration position) {
-    return position + _syncLeadTime;
+    return position +
+        (_parsedLrc?.lines.any((l) => l.words.isNotEmpty) == true
+            ? Duration(milliseconds: widget.syncOffsetMs)
+            : _syncLeadTime);
   }
 
   Duration? _getNextLyricTime() {
@@ -169,6 +216,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
   @override
   void dispose() {
+    _wordClock?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -207,6 +255,44 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final scaler = MediaQuery.textScalerOf(context);
+        final measuredFont = scaler.scale(widget.fontSize);
+        if (_measuredWidth != constraints.maxWidth ||
+            _measuredFont != measuredFont) {
+          _measuredWidth = constraints.maxWidth;
+          _measuredFont = measuredFont;
+          _lineHeights = [];
+          _lineOffsets = [];
+          var offset = 0.0;
+          for (final line in _parsedLrc!.lines) {
+            final painter =
+                TextPainter(
+                  text: TextSpan(
+                    text: line.text,
+                    style: DefaultTextStyle.of(context).style.copyWith(
+                      fontSize: widget.fontSize,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                  textDirection: Directionality.of(context),
+                  textScaler: scaler,
+                )..layout(
+                  maxWidth: (constraints.maxWidth - 32).clamp(
+                    1.0,
+                    double.infinity,
+                  ),
+                );
+            final height = (painter.height + 24).clamp(
+              _itemHeight,
+              double.infinity,
+            );
+            _lineOffsets.add(offset);
+            _lineHeights.add(height);
+            offset += height;
+            painter.dispose();
+          }
+        }
         final overlayColor = isDark
             ? AppTheme.surfaceColor
             : AppTheme.lightSurface;
@@ -214,8 +300,8 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
         // Keep the active line slightly above geometric center. This reads
         // more naturally with the title/actions above the lyric panel and
         // leaves room to preview the upcoming line below it.
-        final focusOffset = (constraints.maxHeight * 0.44) - (_itemHeight / 2);
-        _viewportPadding = focusOffset.clamp(80.0, 220.0);
+        final focusOffset = (constraints.maxHeight * 0.28) - (_itemHeight / 2);
+        _viewportPadding = focusOffset.clamp(24.0, 140.0);
 
         return Stack(
           children: [
@@ -229,7 +315,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
                 addRepaintBoundaries: true,
                 addAutomaticKeepAlives: false,
                 itemCount: _parsedLrc!.lines.length,
-                itemExtent: _itemHeight,
+                itemExtentBuilder: (index, _) => _lineHeights[index],
                 itemBuilder: (context, index) =>
                     RepaintBoundary(child: _buildLyricLine(index, isDark)),
               ),
@@ -366,7 +452,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
           ? () => widget.onSeek!(line.timestamp)
           : null,
       child: SizedBox(
-        height: _itemHeight,
+        height: _lineHeights.length > index ? _lineHeights[index] : _itemHeight,
         child: Center(
           child: AnimatedScale(
             scale: scale,
@@ -401,6 +487,39 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
       final currentLineColor = isDark
           ? AppTheme.textPrimary
           : AppTheme.lightTextPrimary;
+      if (line.words.isNotEmpty) {
+        final position =
+            _position +
+            Duration(milliseconds: widget.syncOffsetMs) -
+            (_parsedLrc?.offset ?? Duration.zero);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text.rich(
+            TextSpan(
+              children: line.words.map((word) {
+                final sung = position >= word.start;
+                final active =
+                    sung && (word.end == null || position < word.end!);
+                return TextSpan(
+                  text: word.text,
+                  style: TextStyle(
+                    color: active
+                        ? (isDark ? AppTheme.primaryLight : AppTheme.primaryColor)
+                        : currentLineColor.withValues(alpha: sung ? 1 : 0.35),
+                  ),
+                );
+              }).toList(),
+            ),
+            key: const ValueKey('word-synced-line'),
+            style: TextStyle(
+              fontSize: currentFontSize,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        );
+      }
       return Text(
             text,
             style: TextStyle(

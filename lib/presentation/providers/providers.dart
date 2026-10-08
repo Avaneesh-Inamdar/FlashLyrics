@@ -1,3 +1,4 @@
+import '../../data/datasources/genius_lyrics_datasource.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,7 +28,7 @@ final dioClientProvider = Provider<Dio>((ref) {
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
       headers: {
-        'User-Agent': 'FlashLyrics/1.1.2',
+        'User-Agent': 'FlashLyrics/1.4.2 (https://github.com/Avaneesh-Inamdar/FlashLyrics)',
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
         'Accept-Encoding': 'gzip, deflate',
@@ -81,6 +82,10 @@ final lyricsRemoteDataSourceProvider = Provider<LyricsRemoteDataSource>((ref) {
   return LyricsRemoteDataSource(dio);
 });
 
+final geniusLyricsDataSourceProvider = Provider<GeniusLyricsDataSource>((ref) {
+  return GeniusLyricsDataSource(ref.watch(dioClientProvider));
+});
+
 /// Lyrics local data source provider
 final lyricsLocalDataSourceProvider = Provider<LyricsLocalDataSource>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
@@ -94,6 +99,7 @@ final lyricsRepositoryProvider = Provider<LyricsRepository>((ref) {
   return LyricsRepositoryImpl(
     remoteDataSource: remoteDataSource,
     localDataSource: localDataSource,
+    geniusDataSource: ref.watch(geniusLyricsDataSourceProvider),
   );
 });
 

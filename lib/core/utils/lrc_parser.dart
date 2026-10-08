@@ -4,11 +4,23 @@ import 'package:flutter/foundation.dart';
 class LrcLine {
   final Duration timestamp;
   final String text;
+  final List<LrcWord> words;
 
-  const LrcLine({required this.timestamp, required this.text});
+  const LrcLine({
+    required this.timestamp,
+    required this.text,
+    this.words = const [],
+  });
 
   @override
   String toString() => '[$timestamp] $text';
+}
+
+class LrcWord {
+  final Duration start;
+  final Duration? end;
+  final String text;
+  const LrcWord({required this.start, this.end, required this.text});
 }
 
 /// Parsed LRC lyrics data
@@ -69,7 +81,14 @@ class ParsedLrc {
 class LrcParser {
   // Regex patterns
   static final RegExp _timeTagPattern = RegExp(
-    r'\[(\d{2}):(\d{2})\.(\d{2,3})\]',
+    r'\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\]',
+  );
+  static final _wordTagPattern = RegExp(r'<(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?>');
+
+  static Duration _time(Match match) => Duration(
+    minutes: int.parse(match.group(1)!),
+    seconds: int.parse(match.group(2)!),
+    milliseconds: int.parse((match.group(3) ?? '0').padRight(3, '0')),
   );
   static final RegExp _metaTagPattern = RegExp(
     r'\[(ti|ar|al|au|offset|length|by):(.+?)\]',
@@ -134,13 +153,37 @@ class LrcParser {
       if (timeMatches.isNotEmpty) {
         // Get the text after all time tags
         final lastMatch = timeMatches.last;
-        final text = trimmedLine.substring(lastMatch.end).trim();
+        final rawText = trimmedLine.substring(lastMatch.end).trim();
+        final tags = _wordTagPattern.allMatches(rawText).toList();
+        final text = rawText.replaceAll(_wordTagPattern, '').trim();
+        final words = <LrcWord>[];
+        for (var i = 0; i < tags.length; i++) {
+          final end = i + 1 < tags.length ? tags[i + 1].start : rawText.length;
+          final word = rawText.substring(tags[i].end, end);
+          if (word.isEmpty) continue;
+          words.add(
+            LrcWord(
+              start: _time(tags[i]),
+              end: i + 1 < tags.length ? _time(tags[i + 1]) : null,
+              text: word,
+            ),
+          );
+        }
+        final validWords =
+            words.map((w) => w.text).join().trim() == text &&
+            words.asMap().entries.every(
+              (entry) =>
+                  entry.key == 0 ||
+                  entry.value.start >= words[entry.key - 1].start,
+            );
 
         // Create a line for each time tag (for repeated lines)
         for (final match in timeMatches) {
           final minutes = int.parse(match.group(1)!);
           final seconds = int.parse(match.group(2)!);
-          final centiseconds = int.parse(match.group(3)!.padRight(3, '0'));
+          final centiseconds = int.parse(
+            (match.group(3) ?? '0').padRight(3, '0'),
+          );
 
           final timestamp = Duration(
             minutes: minutes,
@@ -148,7 +191,24 @@ class LrcParser {
             milliseconds: centiseconds,
           );
 
-          parsedLines.add(LrcLine(timestamp: timestamp, text: text));
+          final shift = timestamp - _time(timeMatches.first);
+          parsedLines.add(
+            LrcLine(
+              timestamp: timestamp,
+              text: text,
+              words: validWords
+                  ? words
+                        .map(
+                          (w) => LrcWord(
+                            start: w.start + shift,
+                            end: w.end == null ? null : w.end! + shift,
+                            text: w.text,
+                          ),
+                        )
+                        .toList()
+                  : const [],
+            ),
+          );
         }
       }
     }
@@ -214,10 +274,7 @@ class LrcParser {
     );
 
     // 4. Remove metadata tags: [ti:...], [ar:...], [al:...], [by:...], [offset:...], etc.
-    cleaned = cleaned.replaceAll(
-      RegExp(r'\[[a-zA-Z]+:[^\]]*\]'),
-      '',
-    );
+    cleaned = cleaned.replaceAll(RegExp(r'\[[a-zA-Z]+:[^\]]*\]'), '');
 
     // 5. Remove any leftover bracketed/angle-bracketed timing blocks containing colons & numbers
     cleaned = cleaned.replaceAll(RegExp(r'\[\s*[\d:.]+\s*\]'), '');
@@ -248,7 +305,8 @@ class LrcParser {
 
   /// Detect if text likely contains LRC timestamps
   static bool containsTimeTags(String text) {
-    return _timeTagPattern.hasMatch(text) || _generalTimeTagPattern.hasMatch(text);
+    return _timeTagPattern.hasMatch(text) ||
+        _generalTimeTagPattern.hasMatch(text);
   }
 
   /// Convert any raw lyrics (possibly LRC) to clean plain text without timestamps

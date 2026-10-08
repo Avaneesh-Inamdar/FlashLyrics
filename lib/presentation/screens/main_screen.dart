@@ -8,6 +8,7 @@ import 'settings_screen.dart';
 import 'search_screen.dart';
 
 import '../widgets/ad_banner_widget.dart';
+import '../widgets/notification_tip.dart';
 
 /// Main navigation screen with custom bottom navigation bar
 class MainScreen extends ConsumerStatefulWidget {
@@ -18,6 +19,13 @@ class MainScreen extends ConsumerStatefulWidget {
 }
 
 class _MainScreenState extends ConsumerState<MainScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showNotificationTip(context, ref.read(sharedPreferencesProvider));
+    });
+  }
   final List<Widget> _screens = const [
     HomeScreen(),
     SearchScreen(),
@@ -31,8 +39,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final currentIndex = ref.watch(tabIndexProvider);
 
     return Scaffold(
-      extendBody: true,
-      body: IndexedStack(index: currentIndex, children: _screens),
+      extendBody: false,
+      body: IndexedStack(index: currentIndex, children: [
+        for (var i = 0; i < _screens.length; i++)
+          TickerMode(enabled: i == currentIndex, child: _screens[i]),
+      ]),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -44,116 +55,39 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   Widget _buildBottomNavigationBar(bool isDark, int currentIndex) {
-    final surfaceColor = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
-    final surfaceLight = isDark
-        ? AppTheme.surfaceLight
-        : AppTheme.lightSurfaceLight;
-    final textHint = isDark ? AppTheme.textHint : AppTheme.lightTextHint;
-
-    // Get bottom padding to account for system navigation bar (3-button nav)
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final bottomMargin = (bottomPadding > 0 ? bottomPadding + 8 : 24.0);
-
-    return RepaintBoundary(
-      child: Container(
-        margin: EdgeInsets.fromLTRB(20, 0, 20, bottomMargin),
-        height: 62,
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: surfaceLight, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(
-              index: 0,
-              icon: Icons.home_rounded,
-              label: 'Home',
-              textHint: textHint,
-              currentIndex: currentIndex,
-            ),
-            _buildNavItem(
-              index: 1,
-              icon: Icons.search_rounded,
-              label: 'Search',
-              textHint: textHint,
-              currentIndex: currentIndex,
-            ),
-            _buildNavItem(
-              index: 2,
-              icon: Icons.library_music_rounded,
-              label: 'Library',
-              textHint: textHint,
-              currentIndex: currentIndex,
-            ),
-            _buildNavItem(
-              index: 3,
-              icon: Icons.settings_rounded,
-              label: 'Settings',
-              textHint: textHint,
-              currentIndex: currentIndex,
-            ),
-          ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: isDark ? AppTheme.surfaceLight : AppTheme.lightSurfaceLight,
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required String label,
-    required Color textHint,
-    required int currentIndex,
-  }) {
-    final isSelected = currentIndex == index;
-
-    return GestureDetector(
-      onTap: () {
-        if (index == 1 && currentIndex == 1) {
-          ref.read(searchFocusTriggerProvider.notifier).state++;
-          return;
-        }
-        ref.read(tabIndexProvider.notifier).setIndex(index);
-      },
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primaryColor.withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 21,
-              color: isSelected ? AppTheme.primaryColor : textHint,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppTheme.primaryColor : textHint,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
+      child: NavigationBar(
+        selectedIndex: currentIndex,
+        backgroundColor: isDark
+            ? AppTheme.backgroundColor
+            : AppTheme.lightBackground,
+        indicatorColor: AppTheme.primaryColor.withValues(alpha: 0.16),
+        onDestinationSelected: (index) {
+          if (index == 1 && currentIndex == 1) {
+            ref.read(searchFocusTriggerProvider.notifier).state++;
+          } else {
+            ref.read(tabIndexProvider.notifier).setIndex(index);
+          }
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.graphic_eq),
+            label: 'Listening',
+          ),
+          NavigationDestination(icon: Icon(Icons.search), label: 'Search'),
+          NavigationDestination(
+            icon: Icon(Icons.library_music_outlined),
+            label: 'Library',
+          ),
+          NavigationDestination(icon: Icon(Icons.tune), label: 'Settings'),
+        ],
       ),
     );
   }

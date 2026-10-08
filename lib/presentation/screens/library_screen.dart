@@ -1,3 +1,5 @@
+import 'package:url_launcher/url_launcher.dart';
+import '../../data/models/lyrics_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -360,6 +362,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: (isDark ? AppTheme.textHint : AppTheme.lightTextHint).withValues(alpha: 0.5), borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 20),
+            if (lyrics is LyricsModel && lyrics.sourceUrl != null)
+              TextButton.icon(
+                icon: const Icon(Icons.open_in_new),
+                label: Text('Source: ${lyrics.source}'),
+                onPressed: () async {
+                  final uri = Uri.tryParse(lyrics.sourceUrl!);
+                  if (uri == null || uri.scheme != 'https') return;
+                  try {
+                    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    if (!opened && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open source.')));
+                    }
+                  } catch (_) {
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open source.')));
+                  }
+                },
+              ),
             LyricsDisplay(lyrics: lyrics),
             const SizedBox(height: 16),
             SizedBox(

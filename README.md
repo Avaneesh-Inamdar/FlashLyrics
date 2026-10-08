@@ -14,6 +14,33 @@ Android app that detects what song you're playing and shows the lyrics. Works wi
   <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN" target="_blank"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="42"></a>
 </p>
 
+## What's New in v1.4.2 (version code 12)
+
+> **Also available on Google Play:** v1.4.2 (version code 12) is rolling out on the [Google Play Store](https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN). Prefer direct install? Grab the APK below from GitHub Releases — same build.
+
+- Word-by-word highlighting from LRCLIB Lyricsfile timestamps and enhanced LRC. No estimated word timings or extra lookup requests. Line-only and plain-text lyrics remain supported.
+- Compact song card, collapsible playback controls, and an earlier reading position on the home screen. Long lyric rows adapt to their text size.
+- Settings checks update availability through Google Play, with a store link and a clear fallback when checking fails.
+- One-time guidance explains how to expand the FlashLyrics notification and tap Float; the same help is available in Settings.
+- Updated AndroidX Activity, retained edge-to-edge and safe insets, removed explicit system-bar color overrides. Native floating lyrics strip inline timing markers.
+
+Full notes: [`RELEASE-1.4.2.md`](RELEASE-1.4.2.md). Version code 12 supersedes the previously uploaded version code 11.
+
+## Download
+
+**Recommended:** get FlashLyrics from the **Google Play Store** (same v1.4.2 build, automatic updates):
+
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN" target="_blank">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="60">
+  </a>
+</p>
+
+**Alternative:** download the release APK directly from [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases) — e.g. `FlashLyrics-1.4.2-v12.apk` attached to the v1.4.2 release. Useful if you prefer sideloading.
+
+> **Important Note for Existing Users (v1.2.0 or earlier)**:
+> If upgrading from v1.2.0 or earlier, please make sure to **uninstall your existing version first** before installing from Google Play, as FlashLyrics transitioned to an official release signing key. Attempting to install over v1.2 directly will cause a signature mismatch ("App not installed") error.
+
 ## What's New in v1.3.0
 
 - **Floating Lyrics Overlay Window**: Always-on-top lyrics widget over Spotify, YouTube Music, Apple Music, and more with real-time scrolling, tap-to-seek, and fluid multidirectional resizing.
@@ -95,7 +122,7 @@ Spotify, YouTube Music, Apple Music, Amazon Music, SoundCloud, Deezer, Tidal, Ji
 
 | Source | Type | Coverage |
 |--------|------|----------|
-| LRCLIB | Synced (LRC) | Best for timed lyrics |
+| LRCLIB | Line and word synced | Word highlighting where Lyricsfile timing data is available |
 | Textyl | Synced (LRC) | Good backup for synced |
 | ChartLyrics | Plain | Large English catalog |
 | Lyrics.ovh | Plain | Reliable fallback |

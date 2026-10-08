@@ -156,12 +156,12 @@ class LyricsImageGenerator {
     try {
       if (url.startsWith('file://') || url.startsWith('/')) {
         final path = url.startsWith('file://') ? Uri.parse(url).toFilePath() : url;
-        return _decodeBytes(await File(path).readAsBytes());
+        return await _decodeBytes(await File(path).readAsBytes());
       }
       final client = HttpClient();
       final req = await client.getUrl(Uri.parse(url.replaceAll('http://', 'https://')));
       final res = await req.close();
-      return _decodeBytes(Uint8List.fromList(await res.expand((b) => b).toList()));
+      return await _decodeBytes(Uint8List.fromList(await res.expand((b) => b).toList()));
     } catch (_) {
       return _fetchItunesCover(song);
     }
@@ -179,7 +179,7 @@ class LyricsImageGenerator {
       final imgUrl = match.group(1)!.replaceAll('100x100bb', '600x600bb').replaceAll('http://', 'https://');
       final imgReq = await client.getUrl(Uri.parse(imgUrl));
       final imgRes = await imgReq.close();
-      return _decodeBytes(Uint8List.fromList(await imgRes.expand((b) => b).toList()));
+      return await _decodeBytes(Uint8List.fromList(await imgRes.expand((b) => b).toList()));
     } catch (_) {
       return null;
     }

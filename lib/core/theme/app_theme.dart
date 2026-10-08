@@ -24,9 +24,9 @@ class AppTheme {
 
   static const Map<String, AccentPalette> _accentPalettes = {
     'emerald': AccentPalette(
-      primary: Color(0xFF10B981),
-      primaryLight: Color(0xFF6EE7B7),
-      primaryDark: Color(0xFF047857),
+      primary: Color(0xFF24805A),
+      primaryLight: Color(0xFF8BC8A5),
+      primaryDark: Color(0xFF185B3F),
       secondary: Color(0xFF0EA5E9),
       accent: Color(0xFFF59E0B),
     ),
@@ -74,29 +74,29 @@ class AppTheme {
   static Color get primaryDark => _palette.primaryDark;
   static Color get secondaryColor => _palette.secondary;
   static Color get accentColor => _palette.accent;
-  // Refined, less "vibecoded" palette - muted, editorial, minimal gradients
-  static const Color backgroundColor = Color(0xFF0E0E10); // Soft near-black, less harsh
-  static const Color surfaceColor = Color(0xFF18181B); // Neutral zinc surface
-  static const Color surfaceLight = Color(0xFF232328); // Slightly lighter for borders
+  // Warm paper and charcoal surfaces with botanical accents.
+  static const Color backgroundColor = Color(0xFF161917); // Soft near-black, less harsh
+  static const Color surfaceColor = Color(0xFF202521); // Neutral zinc surface
+  static const Color surfaceLight = Color(0xFF303831); // Slightly lighter for borders
   static const Color errorColor = Color(0xFFE5484D); // Muted red
   static const Color successColor = Color(0xFF2EB872); // Muted green
 
   // Text colors (Dark Mode)
-  static const Color textPrimary = Color(0xFFF5F5F7); // Soft white
-  static const Color textSecondary = Color(0xFFB3B3C2); // Muted gray
-  static const Color textHint = Color(0xFF7A7A8C); // Subtle gray
+  static const Color textPrimary = Color(0xFFF4F0E7); // Soft white
+  static const Color textSecondary = Color(0xFFB6BDB4); // Muted gray
+  static const Color textHint = Color(0xFF929B91); // Subtle gray
 
   // Light Mode Colors - cleaner, less warm, more neutral
-  static const Color lightBackground = Color(0xFFF8F8F7);
+  static const Color lightBackground = Color(0xFFF5F1E7);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightSurfaceLight = Color(0xFFEDEDEC);
-  static const Color lightTextPrimary = Color(0xFF18181B);
-  static const Color lightTextSecondary = Color(0xFF71717A);
-  static const Color lightTextHint = Color(0xFFA1A1AA);
+  static const Color lightSurfaceLight = Color(0xFFE5DFD2);
+  static const Color lightTextPrimary = Color(0xFF202521);
+  static const Color lightTextSecondary = Color(0xFF61685F);
+  static const Color lightTextHint = Color(0xFF747B70);
 
   // Kept for backward compat but now solid-like, minimal contrast
   static const LinearGradient lightBackgroundGradient = LinearGradient(
-    colors: [Color(0xFFF8F8F7), Color(0xFFF1F1F0)],
+    colors: [Color(0xFFF5F1E7), Color(0xFFF5F1E7)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
@@ -114,15 +114,15 @@ class AppTheme {
     end: Alignment.bottomRight,
   );
 
-  // Solid-like gradients to avoid heavy vibecoded look
+  // Flat surfaces retain compatibility with existing gradient consumers.
   static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFF0E0E10), Color(0xFF0E0E10)],
+    colors: [Color(0xFF161917), Color(0xFF161917)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF18181B), Color(0xFF18181B)],
+    colors: [Color(0xFF202521), Color(0xFF202521)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -158,7 +158,7 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
         iconTheme: const IconThemeData(color: textPrimary),
-        titleTextStyle: GoogleFonts.spaceGrotesk(
+        titleTextStyle: GoogleFonts.manrope(
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -180,7 +180,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.spaceGrotesk(
+          textStyle: GoogleFonts.manrope(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -194,7 +194,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.spaceGrotesk(
+          textStyle: GoogleFonts.manrope(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -203,7 +203,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primaryColor,
-          textStyle: GoogleFonts.spaceGrotesk(
+          textStyle: GoogleFonts.manrope(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -223,13 +223,13 @@ class AppTheme {
         indicatorColor: primaryColor.withValues(alpha: 0.2),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.spaceGrotesk(
+            return GoogleFonts.manrope(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: primaryColor,
             );
           }
-          return GoogleFonts.spaceGrotesk(
+          return GoogleFonts.manrope(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: textHint,
@@ -247,7 +247,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surfaceLight,
-        hintStyle: GoogleFonts.spaceGrotesk(color: textHint),
+        hintStyle: GoogleFonts.manrope(color: textHint),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -263,14 +263,14 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: surfaceLight,
-        contentTextStyle: GoogleFonts.spaceGrotesk(color: textPrimary),
+        contentTextStyle: GoogleFonts.manrope(color: textPrimary),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: surfaceColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        titleTextStyle: GoogleFonts.spaceGrotesk(
+        titleTextStyle: GoogleFonts.manrope(
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: textPrimary,
@@ -311,7 +311,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.spaceGrotesk(
+        titleTextStyle: GoogleFonts.manrope(
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: lightTextPrimary,
@@ -334,7 +334,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.spaceGrotesk(
+          textStyle: GoogleFonts.manrope(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -348,7 +348,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.spaceGrotesk(
+          textStyle: GoogleFonts.manrope(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -357,7 +357,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primaryColor,
-          textStyle: GoogleFonts.spaceGrotesk(
+          textStyle: GoogleFonts.manrope(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -377,13 +377,13 @@ class AppTheme {
         indicatorColor: primaryColor.withValues(alpha: 0.15),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.spaceGrotesk(
+            return GoogleFonts.manrope(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: primaryColor,
             );
           }
-          return GoogleFonts.spaceGrotesk(
+          return GoogleFonts.manrope(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: lightTextHint,
@@ -401,7 +401,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: lightSurfaceLight,
-        hintStyle: GoogleFonts.spaceGrotesk(color: lightTextHint),
+        hintStyle: GoogleFonts.manrope(color: lightTextHint),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -417,14 +417,14 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: lightSurfaceLight,
-        contentTextStyle: GoogleFonts.spaceGrotesk(color: lightTextPrimary),
+        contentTextStyle: GoogleFonts.manrope(color: lightTextPrimary),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: lightSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        titleTextStyle: GoogleFonts.spaceGrotesk(
+        titleTextStyle: GoogleFonts.manrope(
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: lightTextPrimary,
@@ -446,86 +446,86 @@ class AppTheme {
   /// Build custom text theme with Space Grotesk
   static TextTheme _buildTextTheme() {
     return TextTheme(
-      displayLarge: GoogleFonts.spaceGrotesk(
+      displayLarge: GoogleFonts.manrope(
         fontSize: 56,
         fontWeight: FontWeight.w800,
         color: textPrimary,
         letterSpacing: -1.5,
       ),
-      displayMedium: GoogleFonts.spaceGrotesk(
+      displayMedium: GoogleFonts.manrope(
         fontSize: 44,
         fontWeight: FontWeight.w700,
         color: textPrimary,
         letterSpacing: -1,
       ),
-      displaySmall: GoogleFonts.spaceGrotesk(
+      displaySmall: GoogleFonts.manrope(
         fontSize: 36,
         fontWeight: FontWeight.w700,
         color: textPrimary,
         letterSpacing: -0.5,
       ),
-      headlineLarge: GoogleFonts.spaceGrotesk(
+      headlineLarge: GoogleFonts.manrope(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         color: textPrimary,
         letterSpacing: -0.5,
       ),
-      headlineMedium: GoogleFonts.spaceGrotesk(
+      headlineMedium: GoogleFonts.manrope(
         fontSize: 28,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      headlineSmall: GoogleFonts.spaceGrotesk(
+      headlineSmall: GoogleFonts.manrope(
         fontSize: 24,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      titleLarge: GoogleFonts.spaceGrotesk(
+      titleLarge: GoogleFonts.manrope(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      titleMedium: GoogleFonts.spaceGrotesk(
+      titleMedium: GoogleFonts.manrope(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: textPrimary,
         letterSpacing: 0.1,
       ),
-      titleSmall: GoogleFonts.spaceGrotesk(
+      titleSmall: GoogleFonts.manrope(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: textPrimary,
         letterSpacing: 0.1,
       ),
-      bodyLarge: GoogleFonts.spaceGrotesk(
+      bodyLarge: GoogleFonts.manrope(
         fontSize: 16,
         fontWeight: FontWeight.w400,
         color: textPrimary,
         height: 1.5,
       ),
-      bodyMedium: GoogleFonts.spaceGrotesk(
+      bodyMedium: GoogleFonts.manrope(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: textPrimary,
         height: 1.5,
       ),
-      bodySmall: GoogleFonts.spaceGrotesk(
+      bodySmall: GoogleFonts.manrope(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: textSecondary,
         height: 1.4,
       ),
-      labelLarge: GoogleFonts.spaceGrotesk(
+      labelLarge: GoogleFonts.manrope(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: textPrimary,
       ),
-      labelMedium: GoogleFonts.spaceGrotesk(
+      labelMedium: GoogleFonts.manrope(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: textSecondary,
       ),
-      labelSmall: GoogleFonts.spaceGrotesk(
+      labelSmall: GoogleFonts.manrope(
         fontSize: 11,
         fontWeight: FontWeight.w500,
         color: textHint,
@@ -537,86 +537,86 @@ class AppTheme {
   /// Build light text theme
   static TextTheme _buildLightTextTheme() {
     return TextTheme(
-      displayLarge: GoogleFonts.spaceGrotesk(
+      displayLarge: GoogleFonts.manrope(
         fontSize: 56,
         fontWeight: FontWeight.w800,
         color: lightTextPrimary,
         letterSpacing: -1.5,
       ),
-      displayMedium: GoogleFonts.spaceGrotesk(
+      displayMedium: GoogleFonts.manrope(
         fontSize: 44,
         fontWeight: FontWeight.w700,
         color: lightTextPrimary,
         letterSpacing: -1,
       ),
-      displaySmall: GoogleFonts.spaceGrotesk(
+      displaySmall: GoogleFonts.manrope(
         fontSize: 36,
         fontWeight: FontWeight.w700,
         color: lightTextPrimary,
         letterSpacing: -0.5,
       ),
-      headlineLarge: GoogleFonts.spaceGrotesk(
+      headlineLarge: GoogleFonts.manrope(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         color: lightTextPrimary,
         letterSpacing: -0.5,
       ),
-      headlineMedium: GoogleFonts.spaceGrotesk(
+      headlineMedium: GoogleFonts.manrope(
         fontSize: 28,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      headlineSmall: GoogleFonts.spaceGrotesk(
+      headlineSmall: GoogleFonts.manrope(
         fontSize: 24,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      titleLarge: GoogleFonts.spaceGrotesk(
+      titleLarge: GoogleFonts.manrope(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      titleMedium: GoogleFonts.spaceGrotesk(
+      titleMedium: GoogleFonts.manrope(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
         letterSpacing: 0.1,
       ),
-      titleSmall: GoogleFonts.spaceGrotesk(
+      titleSmall: GoogleFonts.manrope(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
         letterSpacing: 0.1,
       ),
-      bodyLarge: GoogleFonts.spaceGrotesk(
+      bodyLarge: GoogleFonts.manrope(
         fontSize: 16,
         fontWeight: FontWeight.w400,
         color: lightTextPrimary,
         height: 1.5,
       ),
-      bodyMedium: GoogleFonts.spaceGrotesk(
+      bodyMedium: GoogleFonts.manrope(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: lightTextPrimary,
         height: 1.5,
       ),
-      bodySmall: GoogleFonts.spaceGrotesk(
+      bodySmall: GoogleFonts.manrope(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: lightTextSecondary,
         height: 1.4,
       ),
-      labelLarge: GoogleFonts.spaceGrotesk(
+      labelLarge: GoogleFonts.manrope(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: lightTextPrimary,
       ),
-      labelMedium: GoogleFonts.spaceGrotesk(
+      labelMedium: GoogleFonts.manrope(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: lightTextSecondary,
       ),
-      labelSmall: GoogleFonts.spaceGrotesk(
+      labelSmall: GoogleFonts.manrope(
         fontSize: 11,
         fontWeight: FontWeight.w500,
         color: lightTextHint,

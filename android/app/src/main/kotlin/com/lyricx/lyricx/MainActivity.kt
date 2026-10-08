@@ -24,6 +24,8 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.install.model.UpdateAvailability
 
 /**
  * Main Activity with Flutter method channel integration for media detection.
@@ -41,8 +43,8 @@ class MainActivity : FlutterFragmentActivity() {
     private var eventSink: EventChannel.EventSink? = null
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
@@ -112,6 +114,22 @@ class MainActivity : FlutterFragmentActivity() {
         // Method channel for calling native methods
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                "checkForUpdates" -> {
+                    AppUpdateManagerFactory.create(this).appUpdateInfo
+                        .addOnSuccessListener { info ->
+                            if (info.updateAvailability() == UpdateAvailability.UNKNOWN) {
+                                result.error("UPDATE_CHECK_UNKNOWN", "Google Play could not determine update availability", null)
+                                return@addOnSuccessListener
+                            }
+                            result.success(mapOf(
+                                "available" to (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE),
+                                "versionCode" to info.availableVersionCode()
+                            ))
+                        }
+                        .addOnFailureListener { error ->
+                            result.error("UPDATE_CHECK_FAILED", error.message, null)
+                        }
+                }
                 "checkNotificationAccess" -> {
                     result.success(isNotificationAccessEnabled())
                 }
