@@ -27,11 +27,11 @@ FlashLyrics reads the track information shared by your music player and finds th
 ## A closer look
 
 <table>
-  <tr><th>Listening · light</th><th>Listening · dark</th><th>Offline library</th></tr>
+  <tr><th>Listening · light</th><th>Listening · dark</th><th>Playback controls</th></tr>
   <tr>
-    <td><img src="docs/screenshots/listening-light.png" alt="Current light theme with compact song card and word-by-word lyrics" width="260" /></td>
-    <td><img src="docs/screenshots/listening-dark.png" alt="Current dark theme with progressive word highlighting" width="260" /></td>
-    <td><img src="docs/screenshots/library-light.png" alt="Saved lyrics in the current offline library" width="260" /></td>
+    <td><img src="docs/screenshots/listening-light-v2.png" alt="Active playback in light theme with official On & On cover art" width="260" /></td>
+    <td><img src="docs/screenshots/listening-dark-v2.png" alt="Active playback in dark theme with official On & On cover art" width="260" /></td>
+    <td><img src="docs/screenshots/playback-light-v2.png" alt="Expanded playback controls with official On & On cover art" width="260" /></td>
   </tr>
 </table>
 

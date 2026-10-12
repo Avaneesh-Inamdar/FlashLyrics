@@ -16,10 +16,11 @@ import 'package:lyricx/data/models/lyrics_model.dart';
 import 'package:lyricx/domain/entities/song.dart';
 import 'package:lyricx/presentation/providers/providers.dart';
 import 'package:lyricx/presentation/screens/main_screen.dart';
+import 'package:lyricx/presentation/widgets/song_card.dart';
 import 'package:lyricx/services/media_detection_service.dart';
 import 'media_recovery_test.dart' show PlaybackService, RecoveryRemote;
 
-const demoLrc = '[00:05]<00:05>And <00:06>on <00:06.5>and <00:07.5>on<00:08.5>';
+const demoLrc = '[00:05]<00:05>On <00:06>and <00:07.5>on<00:08.5>';
 
 LyricsModel demoLyrics(String title, String artist, {bool synced = true}) =>
     LyricsModel(
@@ -27,7 +28,7 @@ LyricsModel demoLyrics(String title, String artist, {bool synced = true}) =>
       songId: title,
       trackName: title,
       artistName: artist,
-      plainLyrics: 'And on and on',
+      plainLyrics: 'On and on',
       lrcLyrics: synced ? demoLrc : null,
       isSynced: synced,
       source: 'LRCLIB',
@@ -165,6 +166,38 @@ void main() {
         await tester.pump();
         expect(tester.takeException(), isNull);
         if (entry.key == 0) {
+          final cover = find.descendant(
+            of: find.byType(SongCard),
+            matching: find.byType(RawImage),
+          );
+          for (var attempt = 0; attempt < 20; attempt++) {
+            await tester.runAsync(() async {
+              await Future<void>.delayed(const Duration(milliseconds: 25));
+            });
+            await tester.pump();
+            if (cover.evaluate().isNotEmpty &&
+                tester.widget<RawImage>(cover).image != null)
+              break;
+          }
+          expect(cover, findsOneWidget);
+          expect(
+            tester.widget<RawImage>(cover).image,
+            isNotNull,
+            reason:
+                'README must contain decoded cover art, never a placeholder',
+          );
+          service.positions.add(
+            const PlaybackPosition(
+              position: Duration(milliseconds: 7000),
+              duration: Duration(minutes: 3, seconds: 28),
+              isPlaying: true,
+            ),
+          );
+          service.playback.add(true);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 40));
+          expect(find.text('Live'), findsOneWidget);
+          expect(find.text('Idle'), findsNothing);
           expect(
             find.byKey(const ValueKey('word-synced-line')),
             findsOneWidget,
@@ -180,12 +213,32 @@ void main() {
               format: ui.ImageByteFormat.png,
             );
             final file = File(
-              'docs/screenshots/${entry.value}-${dark ? 'dark' : 'light'}.png',
+              'docs/screenshots/${entry.value}-${dark ? 'dark' : 'light'}${entry.key == 0 ? '-v2' : ''}.png',
             );
             await file.parent.create(recursive: true);
             await file.writeAsBytes(bytes!.buffer.asUint8List());
             image.dispose();
           });
+          if (entry.key == 0) {
+            await tester.tap(find.text('Playback controls'));
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 400));
+            await tester.pump(const Duration(milliseconds: 400));
+            expect(find.byType(Slider), findsWidgets);
+            await tester.runAsync(() async {
+              final image =
+                  await (key.currentContext!.findRenderObject()!
+                          as RenderRepaintBoundary)
+                      .toImage(pixelRatio: 2);
+              final bytes = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              await File(
+                'docs/screenshots/playback-${dark ? 'dark' : 'light'}-v2.png',
+              ).writeAsBytes(bytes!.buffer.asUint8List());
+              image.dispose();
+            });
+          }
         }
       }
       await tester.pumpWidget(const SizedBox());

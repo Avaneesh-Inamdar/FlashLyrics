@@ -17,6 +17,6 @@ Regenerate from the repository root:
 flutter test test/readme_screenshots_test.dart --dart-define=CAPTURE_README=true
 ```
 
-The capture uses a 390 × 844 logical-pixel viewport at 2× resolution with system-safe padding. It disables optional ads, acknowledges the first-use tip, supplies deterministic cached lyrics and pauses at a partial word fill. Native notification and media APIs are mocked; these images do not demonstrate an Android overlay or device permission flow.
+The capture uses a 390 × 844 logical-pixel viewport at 2× resolution with system-safe padding. It disables optional ads, acknowledges the first-use tip and supplies deterministic cached lyrics. Listening captures simulate active playback and verify the Live indicator and a decoded cover image before capturing. The gallery includes collapsed and expanded playback controls. Native notification and media APIs are mocked; these images do not demonstrate an Android overlay or device permission flow.
 
 Captures are written directly to this directory. Review them before committing after changing the theme, navigation, typography or listening layout.
