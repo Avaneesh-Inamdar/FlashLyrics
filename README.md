@@ -1,132 +1,136 @@
 <p align="center">
-  <img src="icon/Icon-round.png" alt="FlashLyrics Logo" width="120" height="120" />
+  <img src="icon/Icon-round.png" alt="FlashLyrics" width="96" height="96" />
 </p>
 
-# FlashLyrics
-
-> **Google Play**: FlashLyrics is now officially available on the [Google Play Store](https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN)!
-
-Android app that detects what song you're playing and shows the lyrics. Works with Spotify, YouTube Music, Apple Music, JioSaavn, Gaana, SoundCloud, and pretty much any music app.
+<h1 align="center">FlashLyrics</h1>
+<p align="center"><strong>Your music. Every word.</strong></p>
+<p align="center">Lyrics that follow what you’re listening to, across your Android music apps.</p>
 
 <p align="center">
-  <a href="https://buymeacoffee.com/avaneeshinamdar" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="42"></a>
-  &nbsp;&nbsp;
-  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN" target="_blank"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="42"></a>
+  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest"><img src="https://img.shields.io/github/v/release/Avaneesh-Inamdar/FlashLyrics?style=flat-square&amp;color=21815B" alt="Latest GitHub release" /></a>
+  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/releases"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAvaneesh-Inamdar%2FFlashLyrics%2Fmain%2Fdocs%2Fapk-downloads.json&amp;style=flat-square" alt="GitHub APK downloads" /></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-21815B?style=flat-square&amp;logo=android&amp;logoColor=white" alt="Android 8.0 or later" />
 </p>
-
-## What's New in v1.4.2 (version code 12)
-
-> **Also available on Google Play:** v1.4.2 (version code 12) is rolling out on the [Google Play Store](https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN). Prefer direct install? Grab the APK below from GitHub Releases — same build.
-
-- Word-by-word highlighting from LRCLIB Lyricsfile timestamps and enhanced LRC. No estimated word timings or extra lookup requests. Line-only and plain-text lyrics remain supported.
-- Compact song card, collapsible playback controls, and an earlier reading position on the home screen. Long lyric rows adapt to their text size.
-- Settings checks update availability through Google Play, with a store link and a clear fallback when checking fails.
-- One-time guidance explains how to expand the FlashLyrics notification and tap Float; the same help is available in Settings.
-- Updated AndroidX Activity, retained edge-to-edge and safe insets, removed explicit system-bar color overrides. Native floating lyrics strip inline timing markers.
-
-Full notes: [`RELEASE-1.4.2.md`](RELEASE-1.4.2.md). Version code 12 supersedes the previously uploaded version code 11.
-
-## Download
-
-**Recommended:** get FlashLyrics from the **Google Play Store** (same v1.4.2 build, automatic updates):
 
 <p align="center">
-  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN" target="_blank">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="60">
-  </a>
+  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app">Get it on Google Play</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest">Download the APK</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/issues">Report an issue</a>
 </p>
 
-**Alternative:** download the release APK directly from [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases) — e.g. `FlashLyrics-1.4.2-v12.apk` attached to the v1.4.2 release. Useful if you prefer sideloading.
+---
 
-> **Important Note for Existing Users (v1.2.0 or earlier)**:
-> If upgrading from v1.2.0 or earlier, please make sure to **uninstall your existing version first** before installing from Google Play, as FlashLyrics transitioned to an official release signing key. Attempting to install over v1.2 directly will cause a signature mismatch ("App not installed") error.
+FlashLyrics reads the track information shared by your music player and finds the lyrics for you. Follow along in the app, keep lyrics above other apps with the floating window, or revisit saved songs offline.
 
-## What's New in v1.3.0
+## A closer look
 
-- **Floating Lyrics Overlay Window**: Always-on-top lyrics widget over Spotify, YouTube Music, Apple Music, and more with real-time scrolling, tap-to-seek, and fluid multidirectional resizing.
-- **Instant Skeleton Loading**: Smooth skeleton transition effect in the floating overlay as soon as tracks switch.
-- **Now Playing Media Notification**: Persistent notification keeping track info accessible with a 1-tap "Float" button to summon the floating lyrics instantly without opening the full app.
-- **Performance Optimization**: Eliminated frame drops and main-thread rebuilds for smooth 120Hz scrolling and fast app switching.
-- **Smart Share Navigation**: Opening lyric sharing automatically highlights and scrolls straight to the currently playing line, with centered formatting and album cover art included.
-- **Buy Me a Coffee Support**: Direct developer support integration in Settings.
-- **Ad-Supported with Toggle**: Non-intrusive banner ads with a one-click toggle in Settings to turn off anytime.
-- **Google Play Store Launch**: Official distribution on Google Play Store.
-## Features
+<table>
+  <tr><th>Listening · light</th><th>Listening · dark</th><th>Offline library</th></tr>
+  <tr>
+    <td><img src="docs/screenshots/listening-light.png" alt="Current light theme with compact song card and word-by-word lyrics" width="260" /></td>
+    <td><img src="docs/screenshots/listening-dark.png" alt="Current dark theme with progressive word highlighting" width="260" /></td>
+    <td><img src="docs/screenshots/library-light.png" alt="Saved lyrics in the current offline library" width="260" /></td>
+  </tr>
+</table>
 
+<sub>Current app renders featuring NCS tracks and the official On & On cover artwork. The short lyric excerpt uses illustrative word timings. [Capture details and artwork credits](docs/screenshots/README.md).</sub>
 
-### Light & Dark Mode
+## Built for listening
 
-Fully supports light and dark themes so it looks great no matter your preference.
+| Feature | What you get |
+| --- | --- |
+| Automatic detection | Track and artist information from compatible Android media sessions. |
+| Word-by-word lyrics | Progressive fill, subtle lift and glow when genuine word timestamps are available. |
+| Synced lyrics | Automatic line scrolling, tap-to-seek, and timing adjustments. |
+| Floating window | Lyrics above your music player, with resizing and optional seeking. |
+| Offline library | Previously fetched lyrics saved on your device. |
+| Manual search | Search by song or artist, choose a result, and explore Genius for harder-to-find tracks. |
+| Sharing | Share selected lyrics as text or a styled image. |
+| Personalization | Light, dark or system theme; accent colors; adjustable text size. |
 
-<p align="center">
-  <img src="Images/Light%20and%20Dark%20Mode.jpeg" alt="Light and Dark Mode" width="250" />
-</p>
+### Timing that matches the available lyrics
 
-### Offline Library
+FlashLyrics supports **word timed**, **line synced**, and **plain text** lyrics. Lyrics appear before an optional background lookup checks for matching word timestamps; a successful match upgrades the display and is cached.
 
-All lyrics you've viewed are cached locally. Access your entire library offline — instantly.
+For songs with line timestamps only, the optional **Karaoke** button previews a word animation within each line. The app labels this as **estimated timing**. Those estimates are never saved as genuine provider timestamps. Word timing and song coverage vary by source.
 
-<p align="center">
-  <img src="Images/Library1.jpeg" alt="Lyrics Library" width="250" />
-</p>
+## Get started
 
-### Manual Search
+1. Install from [Google Play](https://play.google.com/store/apps/details?id=music.flashlyrics.app) or choose the `.apk` asset on [GitHub Releases](https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest).
+2. Grant **Notification Access** when prompted so FlashLyrics can detect the current track.
+3. Play music in your usual player and open the **Listening** tab.
+4. To use floating lyrics, allow **Display over other apps**, expand the FlashLyrics notification, and tap **Float**. You can revisit the instructions in Settings.
 
-Can't find a song automatically? Search for any song by title or artist and get lyrics instantly.
+Spotify, YouTube Music, Apple Music and other Android players can work when they expose media-session metadata. Detection, position updates and seeking depend on the player’s support.
 
-<p align="center">
-  <img src="Images/Search%20Feature.jpeg" alt="Search Feature" width="250" />
-</p>
+**Upgrading from 1.2.0 or earlier?** Those builds used a different signing key. Uninstall the old build before installing the current release; uninstalling also removes locally saved lyrics and settings.
 
-### Accent Color Customization
+## What’s new
 
-Personalize the app with your choice of accent colors to match your style.
+The current source is **1.4.2 · Android version code 13**. Published downloads are listed on the release page; Google Play availability follows its release rollout.
 
-<p align="center">
-  <img src="Images/AccentColor.jpeg" alt="Accent Color Customization" width="250" />
-</p>
+- Animated word highlighting with optional background timing upgrades.
+- A compact listening screen with collapsible playback controls.
+- Search results can appear while slower providers are still responding.
+- Google Play update checks and notification guidance in Settings.
+- Refined Android edge-to-edge handling and lyrics layouts.
 
-### Synced Lyrics with Tap-to-Seek
-
-Real-time synced lyrics that scroll automatically with the music. Tap on any lyric line to jump to that part of the song - just like your favorite streaming apps!
-
-### Song Controls
-
-Control playback directly from the app with the built-in seek bar. Play, pause, and seek to any position in the song without switching apps.
-
-### Lyrics Sync Offset
-
-Adjust the lyrics timing if they appear too early or late. Perfect for songs with unusual timing or when the sync is slightly off.
-
-### More
-
-- **Auto-detects** the currently playing song using Android's MediaSession
-- **Synced lyrics** that scroll in real time (falls back to plain lyrics)
-- **Tap on lyrics** to seek to that position in the song
-- **Playback controls** with seek bar for manual song navigation
-- Pulls lyrics from **6 different sources** — LRCLIB, Textyl, ChartLyrics, Lyrics.ovh, Lyrist, NetEase
-- **Share lyrics** as a styled image or plain text
-- **Album art** pulled from the playing app
-- Works with **Hindi, Japanese, Korean, Chinese** songs (NetEase covers Asian music well)
-
-## Supported music apps
-
-Spotify, YouTube Music, Apple Music, Amazon Music, SoundCloud, Deezer, Tidal, JioSaavn, Gaana, Wynk Music, Hungama, Resso, Musixmatch, Samsung Music, Mi Music, PowerAmp, VLC, Foobar, and 40+ more. If the app exposes a MediaSession, FlashLyrics will probably pick it up.
-
-## Permissions
-
-- **Notification Access** — required to detect what's playing. The app reads media notifications to get song title/artist. That's it.
-
+See the [1.4.2 release notes](RELEASE-1.4.2.md) for validation and device-testing limitations.
 
 ## Lyrics sources
 
-| Source | Type | Coverage |
-|--------|------|----------|
-| LRCLIB | Line and word synced | Word highlighting where Lyricsfile timing data is available |
-| Textyl | Synced (LRC) | Good backup for synced |
-| ChartLyrics | Plain | Large English catalog |
-| Lyrics.ovh | Plain | Reliable fallback |
-| Lyrist | Plain | Additional backup |
-| NetEase | Plain | Strong for Asian music |
+| Source | Used for |
+| --- | --- |
+| [LRCLIB](https://lrclib.net) | Line timestamps, word timestamps where available, and plain lyrics. |
+| [Textyl](https://textyl.co) | An additional synced-lyrics source. |
+| [ChartLyrics](https://www.chartlyrics.com) | Plain-text lyrics. |
+| [Lyrics.ovh](https://lyrics.ovh) | Plain-text fallback. |
+| [Lyrist](https://github.com/asrvd/lyrist) | An additional plain-text fallback. |
+| [NetEase Music](https://music.163.com) | Additional song coverage and synced lyrics where available. |
+| [Genius](https://genius.com) | Matching web lyrics for niche songs, with a dedicated manual lookup. |
 
-All sources are free and don't require API keys.
+Results depend on provider availability and matching metadata. Lyrics belong to their respective rights holders; FlashLyrics does not create missing lyrics or timestamps.
+
+## Permissions and storage
+
+**Notification Access** enables music detection. **Display over other apps** enables the floating window. Android notification permission allows the app’s playback notification where required.
+
+Fetched lyrics and preferences are stored locally. Online lyric lookup sends song or search information to the selected providers. Banner advertising is optional and can be disabled in Settings.
+
+## Build from source
+
+Use a compatible Flutter SDK with **Dart 3.11 or later**, the Android SDK, and the JDK required by the Android Gradle plugin.
+
+```sh
+git clone https://github.com/Avaneesh-Inamdar/FlashLyrics.git
+cd FlashLyrics
+flutter pub get
+flutter run
+```
+
+Run the checks and build a debug APK:
+
+```sh
+flutter analyze
+flutter test
+flutter build apk --debug
+```
+
+Release builds require your own Android signing configuration in `android/key.properties` and its referenced keystore. Signing files are excluded from version control.
+
+```sh
+flutter build apk --release
+flutter build appbundle --release
+```
+
+The app uses Flutter and Riverpod with native Android media-session and floating-window integration. Screen widgets live in `lib/presentation`, lyric providers and caching in `lib/data`, and Android integrations in `android`.
+
+## Feedback and support
+
+Found a mismatch or a detection problem? [Open an issue](https://github.com/Avaneesh-Inamdar/FlashLyrics/issues) with the app version, Android version, music player, song and artist, and steps to reproduce it.
+
+If FlashLyrics makes your listening better, you can [support development](https://buymeacoffee.com/avaneeshinamdar).
+
+<sub>The download badge counts `.apk` asset downloads from public GitHub Releases, not unique users or Google Play installs. It refreshes periodically through [GitHub Actions](.github/workflows/apk-downloads.yml).</sub>
