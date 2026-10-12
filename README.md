@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app">Get it on Google Play</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest">Download the APK</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/issues">Report an issue</a>
+  <a href="https://play.google.com/store/apps/details?id=music.flashlyrics.app"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="72" /></a>
+  &nbsp;
+  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest"><img src="docs/buttons/download-apk.svg" alt="Download APK from GitHub Releases" height="72" /></a>
+  &nbsp;
+  <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/issues/new"><img src="docs/buttons/report-issue.svg" alt="Report an issue on GitHub" height="72" /></a>
 </p>
 
 ---

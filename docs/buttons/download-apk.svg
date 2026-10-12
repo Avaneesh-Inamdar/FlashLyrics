@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="204" height="72" viewBox="0 0 204 72" role="img" aria-labelledby="title">
+  <title id="title">Download APK from GitHub Releases</title>
+  <rect x="1" y="12" width="202" height="48" rx="7" fill="#18201b" stroke="#516259"/>
+  <g fill="none" stroke="#6de5aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M26 24v17m-6-6 6 6 6-6M17 43v5h18v-5"/>
+  </g>
+  <g fill="#fff" font-family="Arial, Helvetica, sans-serif">
+    <text x="49" y="29" font-size="9" letter-spacing="1.2">GITHUB RELEASES</text>
+    <text x="49" y="47" font-size="18" font-weight="600">Download APK</text>
+  </g>
+</svg>

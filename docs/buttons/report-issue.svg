@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="204" height="72" viewBox="0 0 204 72" role="img" aria-labelledby="title">
+  <title id="title">Report an issue on GitHub</title>
+  <rect x="1" y="12" width="202" height="48" rx="7" fill="#18201b" stroke="#516259"/>
+  <g fill="none" stroke="#6de5aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 25h17v17H25l-6 5V25Z M27.5 29v6"/>
+    <circle cx="27.5" cy="38.5" r="1" fill="#6de5aa" stroke="none"/>
+  </g>
+  <g fill="#fff" font-family="Arial, Helvetica, sans-serif">
+    <text x="49" y="29" font-size="9" letter-spacing="1.2">HELP US IMPROVE</text>
+    <text x="49" y="47" font-size="18" font-weight="600">Report an issue</text>
+  </g>
+</svg>
