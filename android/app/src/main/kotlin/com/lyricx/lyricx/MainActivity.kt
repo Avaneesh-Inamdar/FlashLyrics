@@ -863,6 +863,8 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        MediaNotificationListener.mediaUpdateListener = null
+        eventSink = null
         appIsInForeground = false
         isAppInForeground = false
         super.onDestroy()

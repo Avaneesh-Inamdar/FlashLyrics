@@ -123,6 +123,12 @@ void main() {
           lessThan(tester.getTopLeft(find.byType(NavigationBar)).dy),
         );
         expect(tester.takeException(), isNull);
+        await tester.tap(find.text('Playback controls'));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('Playback controls'));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(tester.takeException(), isNull);
         if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
           await tester.runAsync(() async {
             final image =

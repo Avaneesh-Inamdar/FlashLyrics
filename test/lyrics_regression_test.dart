@@ -29,6 +29,14 @@ class ControlledRemote extends LyricsRemoteDataSource {
   final search = Completer<List<LyricsModel>>();
   int fetches = 0;
   Completer<LyricsModel?>? nextFetch;
+  Completer<LyricsModel?>? words;
+  int wordFetches = 0;
+
+  @override
+  Future<LyricsModel?> findWordSyncedLyrics(String artist, String title) async {
+    wordFetches++;
+    return words == null ? null : await words!.future;
+  }
 
   @override
   Future<List<LyricsModel>> searchByQuery(
@@ -48,6 +56,41 @@ class ControlledRemote extends LyricsRemoteDataSource {
 }
 
 void main() {
+  for (final action in ['upgrade', 'manual', 'clear', 'dispose']) {
+    test('word enrichment is nonblocking and respects $action', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final remote = ControlledRemote()..words = Completer<LyricsModel?>();
+      final container = ProviderContainer(overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        lyricsRemoteDataSourceProvider.overrideWithValue(remote),
+      ]);
+      final notifier = container.read(lyricsNotifierProvider.notifier);
+      await notifier.setSong(const Song(id: 'playing', artist: 'Artist', title: 'Song'));
+      expect(notifier.state.isLoading, false);
+      expect(notifier.state.lyrics, isNotNull);
+      expect(remote.words!.isCompleted, false);
+      expect(remote.wordFetches, 1);
+      if (action == 'manual') notifier.setLyricsFromModel(model('Chosen'));
+      if (action == 'clear') notifier.clear();
+      if (action == 'dispose') container.dispose();
+      remote.words!.complete(LyricsModel(id: 'words', songId: songKey('Artist', 'Song'),
+        plainLyrics: 'Original words', lrcLyrics: '[00:01]<00:01>Original <00:02>words<00:03>',
+        isSynced: true, source: 'LRCLIB', fetchedAt: DateTime(2026), isMatchVerified: true,
+        artistName: 'Artist', trackName: 'Song'));
+      await Future<void>.delayed(Duration.zero);
+      if (action == 'upgrade') {
+        expect(notifier.state.lyrics!.id, 'words');
+        expect(container.read(lyricsLocalDataSourceProvider).getCachedLyrics(songKey('Artist', 'Song'))!.id, 'words');
+      } else if (action == 'manual') {
+        expect(notifier.state.currentSong!.title, 'Chosen');
+      } else if (action == 'clear') {
+        expect(notifier.state.lyrics, isNull);
+      }
+      if (action != 'dispose') container.dispose();
+    });
+  }
+
   test('overlapping startup detection coalesces the same song lookup', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

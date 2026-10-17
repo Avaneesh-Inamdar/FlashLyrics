@@ -24,7 +24,11 @@ class LyricsRepositoryImpl implements LyricsRepository {
        _geniusDataSource = geniusDataSource;
 
   @override
-  Future<Lyrics> getLyrics(Song song, {List<String>? providerPriority, bool forceRefresh = false}) async {
+  Future<Lyrics> getLyrics(
+    Song song, {
+    List<String>? providerPriority,
+    bool forceRefresh = false,
+  }) async {
     // Generate consistent songId from artist/title (same as searchLyrics)
 
     // Check cache only if it matches the exact song
@@ -45,7 +49,9 @@ class LyricsRepositoryImpl implements LyricsRepository {
 
     lyrics ??= await _geniusDataSource?.findExact(song.artist, song.title);
 
-    if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
+    if (lyrics != null &&
+        (lyrics.plainLyrics.trim().isNotEmpty ||
+            (lyrics.lrcLyrics?.trim().isNotEmpty ?? false))) {
       await _localDataSource.cacheLyrics(lyrics);
       return lyrics;
     }
@@ -61,7 +67,6 @@ class LyricsRepositoryImpl implements LyricsRepository {
     String title, {
     List<String>? providerPriority,
   }) async {
-
     // First check cache
     final cachedLyrics = _findCached(artist: artist, title: title);
     if (cachedLyrics != null) {
@@ -77,7 +82,9 @@ class LyricsRepositoryImpl implements LyricsRepository {
 
     lyrics ??= await _geniusDataSource?.findExact(artist, title);
 
-    if (lyrics != null && lyrics.plainLyrics.isNotEmpty) {
+    if (lyrics != null &&
+        (lyrics.plainLyrics.trim().isNotEmpty ||
+            (lyrics.lrcLyrics?.trim().isNotEmpty ?? false))) {
       await _localDataSource.cacheLyrics(lyrics);
       return lyrics;
     }
@@ -127,8 +134,10 @@ class LyricsRepositoryImpl implements LyricsRepository {
     if (exact != null) return exact;
     // Recover legacy entries by metadata without trusting colliding old keys.
     for (final entry in _localDataSource.getAllCachedLyrics()) {
-      if (entry.artistName != null && entry.trackName != null &&
-          songKey(entry.artistName!, entry.trackName!) == key) return entry;
+      if (entry.artistName != null &&
+          entry.trackName != null &&
+          songKey(entry.artistName!, entry.trackName!) == key)
+        return entry;
     }
     return null;
   }

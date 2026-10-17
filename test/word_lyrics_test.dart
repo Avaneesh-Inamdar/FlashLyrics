@@ -4,6 +4,7 @@ import 'package:lyricx/core/utils/lrc_parser.dart';
 import 'package:lyricx/core/utils/word_lyrics.dart';
 import 'package:lyricx/data/models/lyrics_model.dart';
 import 'package:lyricx/presentation/widgets/synced_lyrics_display.dart';
+import 'package:lyricx/presentation/widgets/karaoke_line.dart';
 
 const wordFixture = '''version: '1.0'
 lines:
@@ -96,22 +97,23 @@ void main() {
       await tester.pump();
     }
 
-    Color? color(int index) {
-      final text = tester.widget<Text>(
+    double progress(int index) {
+      final text = tester.widget<KaraokeLine>(
         find.byKey(const ValueKey('word-synced-line')),
       );
-      return (text.textSpan! as TextSpan).children![index].style?.color;
+      return wordProgress(text.line.words[index], text.position.value + text.offset);
     }
 
     await show(1100);
-    final firstColor = color(0);
-    expect(color(1), isNot(firstColor));
+    expect(progress(0), closeTo(0.25, 0.001));
+    expect(progress(1), 0);
     await show(1700);
-    expect(color(1), firstColor);
+    expect(progress(0), 1);
+    expect(progress(1), closeTo(1 / 6, 0.001));
     await tester.pump(const Duration(seconds: 5));
-    expect(color(1), firstColor); // Paused: no drifting clock.
+    expect(progress(1), closeTo(1 / 6, 0.001)); // Paused: no drifting clock.
     await show(1100);
-    expect(color(0), firstColor);
+    expect(progress(0), closeTo(0.25, 0.001));
     await tester.pumpWidget(const SizedBox());
   });
 }

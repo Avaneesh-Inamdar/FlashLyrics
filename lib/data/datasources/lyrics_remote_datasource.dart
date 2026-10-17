@@ -13,6 +13,37 @@ class LyricsRemoteDataSource {
 
   LyricsRemoteDataSource(this._dio);
 
+  /// Optional enrichment, separate from the fast first-result lookup.
+  Future<LyricsModel?> findWordSyncedLyrics(String artist, String title) async {
+    final cancel = CancelToken();
+    try {
+      final response = await _dio.get(ApiConstants.lrclibSearchApi,
+        queryParameters: {'artist_name': artist, 'track_name': title},
+        cancelToken: cancel,
+      ).timeout(const Duration(seconds: 5));
+      if (response.data is! List) return null;
+      for (final entry in response.data as List) {
+        if (entry is! Map<String, dynamic> ||
+            entry['artistName'] is! String || entry['trackName'] is! String ||
+            songKey(entry['artistName'], entry['trackName']) != songKey(artist, title)) continue;
+        final lrc = wordSyncedLrc(entry);
+        if (lrc == null || !lrc.contains(RegExp(r'<\d{1,3}:\d{2}'))) continue;
+        final parsed = await LrcParser.parse(lrc);
+        if (!parsed.lines.any((line) => line.words.isNotEmpty)) continue;
+        return LyricsModel(id: 'lrclib_words_${entry['id']}',
+          songId: songKey(artist, title), plainLyrics: LrcParser.toPlainText(parsed),
+          lrcLyrics: lrc, isSynced: true, source: 'LRCLIB', fetchedAt: DateTime.now(),
+          artistName: entry['artistName'], trackName: entry['trackName'],
+          albumName: entry['albumName'] as String?, isMatchVerified: true);
+      }
+    } catch (_) {
+      // Keep the already displayed lyrics on timeouts, offline and bad data.
+    } finally {
+      if (!cancel.isCancelled) cancel.cancel('Word timing lookup complete');
+    }
+    return null;
+  }
+
   /// Clean and normalize text for better search results
   /// Handles Hindi, special characters, and common metadata issues
   String _normalizeText(String text, {bool isNonLatin = false}) {
@@ -1126,12 +1157,28 @@ class LyricsRemoteDataSource {
       }
     }
 
-    // Wait with shorter timeout - we want to return partial results quickly
-    await Future.wait(
-      futures.map(
-        (f) => f.timeout(const Duration(seconds: 7), onTimeout: () {}),
-      ),
-    ).timeout(const Duration(seconds: 9), onTimeout: () => <void>[]);
+    // Show available matches after a short collection window. One stalled
+    // provider must not hold up every search result for seven seconds.
+    final ready = Completer<void>();
+    Timer? grace;
+    void finish() { if (!ready.isCompleted) ready.complete(); }
+    var remaining = futures.length;
+    final deadline = Timer(const Duration(seconds: 7), finish);
+    void settled() {
+      remaining--;
+      if (ready.isCompleted) return;
+      if (results.any((m) => m.plainLyrics.trim().isNotEmpty)) {
+        grace ??= Timer(const Duration(milliseconds: 350), finish);
+      }
+      if (remaining == 0) finish();
+    }
+    for (final future in futures) {
+      unawaited(future.then((_) => settled(), onError: (Object _) => settled()));
+    }
+    if (futures.isEmpty) finish();
+    await ready.future;
+    deadline.cancel();
+    grace?.cancel();
 
     // Filter empties (extra safety) and sort
     final filtered = results

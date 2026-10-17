@@ -119,6 +119,12 @@ class LyricsOverlayService : Service() {
     private var overlayRunnable: Runnable? = null
     private var lastDisplayedIdx = -2
     private var mediaSessionManager: MediaSessionManager? = null
+    private val lyricsWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var lyricsRequest: java.util.concurrent.Future<*>? = null
+    private var lyricsGeneration = 0
+    private var requestedSong: NativeSong? = null
+    private var playbackAvailable = true
+    private var lastSessionCheckMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -151,6 +157,7 @@ class LyricsOverlayService : Service() {
                 val seekEnabled = intent.getBooleanExtra("enableSeek", OverlayLyricsCache.seekEnabled)
                 val useLrc = if (lrc.isNotEmpty()) lrc else lyrics
                 showOverlay(title, artist, currentLine, lyrics, useLrc, offset.toLong(), seekEnabled)
+                if (isShowing) requestNativeLyrics(title, artist)
             }
             ACTION_UPDATE -> {
                 // Legacy manual update from Flutter - keep for compatibility
@@ -218,6 +225,7 @@ class LyricsOverlayService : Service() {
 
     fun handleSongChanged(title: String, artist: String) {
         overlayHandler.post {
+            if (NativePlayback.current(this)?.matches(title, artist) != true) return@post
             if (title.isNotEmpty() && (title != currentDisplayedTitle || artist != currentDisplayedArtist)) {
                 Log.d(TAG, "Direct song change notification: $title by $artist (was $currentDisplayedTitle)")
                 currentDisplayedTitle = title
@@ -229,6 +237,7 @@ class LyricsOverlayService : Service() {
                 lastDisplayedIdx = -2
                 updateTitle(title, artist)
                 renderSkeletonLoading("Loading lyrics...")
+                requestNativeLyrics(title, artist)
             }
         }
     }
@@ -1187,33 +1196,44 @@ class LyricsOverlayService : Service() {
      */
     private fun checkForCacheUpdate() {
         try {
-            // Immediate song change detection from active playback (e.g. track changed in music player)
-            val nlsTitle = MediaNotificationListener.currentTitle
-            val nlsArtist = MediaNotificationListener.currentArtist ?: ""
-            if (!nlsTitle.isNullOrEmpty() && (nlsTitle != currentDisplayedTitle || (nlsArtist.isNotEmpty() && nlsArtist != currentDisplayedArtist))) {
-                if (!OverlayLyricsCache.matches(nlsTitle, nlsArtist)) {
-                    // Song changed in player, but new lyrics haven't arrived in cache yet!
-                    currentDisplayedTitle = nlsTitle
-                    currentDisplayedArtist = nlsArtist
-                    currentDisplayedLrcHash = 0
-                    currentDisplayedPlainHash = 0
+            // Notification listener callbacks can be suspended by the device.
+            // The visible overlay independently checks Android playback, at 0.5 Hz.
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastSessionCheckMs >= 2000L) {
+                lastSessionCheckMs = now
+                val live = NativePlayback.current(this)
+                if (live == null) {
+                    playbackAvailable = false
+                    lyricsGeneration++
+                    requestedSong = null
                     lrcLines = emptyList()
-                    plainFallbackLines = emptyList()
-                    lastDisplayedIdx = -2
-                    overlayHandler.post {
-                        updateTitle(nlsTitle, nlsArtist)
-                        renderSkeletonLoading("Loading lyrics...")
-                    }
+                    plainFallbackLines = listOf("No active music found. Start playback to see lyrics.")
+                    renderLrcLines(-1)
+                    MusicNotificationManager.cancelMusicNotification(this)
                     return
                 }
+                if (!playbackAvailable) {
+                    currentDisplayedLrcHash = 0
+                    currentDisplayedPlainHash = 0
+                }
+                playbackAvailable = true
+                if (!live.matches(currentDisplayedTitle, currentDisplayedArtist)) {
+                    handleSongChanged(live.title, live.artist)
+                    return
+                }
+                if (requestedSong == null) requestNativeLyrics(live.title, live.artist)
             }
-
-            val cacheTitle = OverlayLyricsCache.title
-            val cacheArtist = OverlayLyricsCache.artist
+            if (!playbackAvailable) return
+            val cache = OverlayLyricsCache.snapshot()
+            val cacheTitle = cache.title
+            val cacheArtist = cache.artist
             if (cacheTitle.isEmpty() && cacheArtist.isEmpty()) return
-            val cacheLrc = OverlayLyricsCache.lrc
-            val cachePlain = OverlayLyricsCache.plain
-            val cacheOffset = OverlayLyricsCache.syncOffsetMs.toLong()
+            // Never replace the active track with a last-viewed/manual cache entry.
+            if (!NativeSong(currentDisplayedTitle, currentDisplayedArtist, "", false)
+                    .matches(cacheTitle, cacheArtist)) return
+            val cacheLrc = cache.lrc
+            val cachePlain = cache.plain
+            val cacheOffset = cache.offset.toLong()
             val cacheSeek = OverlayLyricsCache.seekEnabled
             val cacheLrcHash = cacheLrc.hashCode()
             val cachePlainHash = cachePlain.hashCode()
@@ -1290,52 +1310,44 @@ class LyricsOverlayService : Service() {
         // Don't clear isUserScrolling here — keep until explicit reset or timeout
     }
 
-    private fun getCurrentPlaybackPositionMs(): Long {
-        // Try MediaNotificationListener static extrapolated position first (fast)
-        try {
-            // If NLS has recent data, use it - it already extrapolates
-            val nlsPos = MediaNotificationListener.currentPosition
-            val nlsPlaying = MediaNotificationListener.currentIsPlaying
-            // If NLS is playing and pos looks fresh (recent update within 2s), use it
-            // We don't have last update time, so fallback to direct query if stale
-            // Prefer direct query for accuracy
-        } catch (_: Exception) {}
-        // Direct MediaSessionManager query with extrapolation
-        return queryPositionDirect()
+    private fun requestNativeLyrics(title: String, artist: String) {
+        val live = NativePlayback.current(this) ?: return
+        if (!live.matches(title, artist)) return
+        if (requestedSong?.matches(title, artist) == true) return
+        requestedSong = live
+        val generation = ++lyricsGeneration
+        lyricsRequest?.cancel(true)
+        val context = applicationContext
+        lyricsRequest = lyricsWorker.submit {
+            val result = try { NativeLyricsLoader.fetch(context, live) } catch (e: Exception) {
+                Log.w(TAG, "Native overlay lyrics unavailable", e)
+                null
+            }
+            overlayHandler.post {
+                if (!isShowing || generation != lyricsGeneration ||
+                    !live.matches(currentDisplayedTitle, currentDisplayedArtist) ||
+                    NativePlayback.current(this)?.matches(title, artist) != true) return@post
+                // Flutter may have supplied richer lyrics while the fallback was running.
+                val matching = OverlayLyricsCache.forSong(live)?.takeIf { it.lrc.isNotBlank() || it.plain.isNotBlank() } ?: result
+                if (matching == null) {
+                    lrcLines = emptyList()
+                    plainFallbackLines = listOf("Lyrics unavailable for this song. Open FlashLyrics to try other sources.")
+                    renderLrcLines(-1)
+                } else {
+                    OverlayLyricsCache.update(title, artist, matching.lrc, matching.plain, matching.offset, isSeekEnabled)
+                    getSharedPreferences("overlay_cache", Context.MODE_PRIVATE).edit()
+                        .putString("title", title).putString("artist", artist)
+                        .putString("lrc", matching.lrc).putString("plain", matching.plain)
+                        .putInt("offset", matching.offset).apply()
+                    checkForCacheUpdate()
+                }
+            }
+        }
     }
 
-    private fun queryPositionDirect(): Long {
-        return try {
-            val msm = mediaSessionManager ?: return MediaNotificationListener.currentPosition
-            val cn = ComponentName(this, MediaNotificationListener::class.java)
-            val controllers = msm.getActiveSessions(cn)
-            if (controllers.isNullOrEmpty()) return MediaNotificationListener.currentPosition
-            // Prefer playing controller
-            var best: MediaController? = null
-            var bestPlaying = false
-            for (c in controllers) {
-                val isPlaying = c.playbackState?.state == PlaybackState.STATE_PLAYING
-                if (isPlaying && !bestPlaying) { best = c; bestPlaying = true }
-                else if (best == null) { best = c; bestPlaying = isPlaying }
-            }
-            best ?: return MediaNotificationListener.currentPosition
-            val state = best.playbackState ?: return MediaNotificationListener.currentPosition
-            val isPlaying = state.state == PlaybackState.STATE_PLAYING
-            if (!isPlaying) return state.position
-            val base = state.position
-            val last = state.lastPositionUpdateTime
-            val speed = if (state.playbackSpeed <= 0) 1.0f else state.playbackSpeed
-            val elapsed = SystemClock.elapsedRealtime() - last
-            val extrapolated = base + (elapsed * speed).toLong()
-            val dur = best.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: MediaNotificationListener.currentDuration
-            when {
-                extrapolated < 0 -> 0
-                dur > 0 && extrapolated > dur -> dur
-                else -> extrapolated
-            }
-        } catch (e: Exception) {
-            MediaNotificationListener.currentPosition
-        }
+    private fun getCurrentPlaybackPositionMs(): Long {
+        val live = NativePlayback.current(this) ?: return 0
+        return if (live.matches(currentDisplayedTitle, currentDisplayedArtist)) live.position else 0
     }
 
     private fun findCurrentIndex(posMs: Long): Int {
@@ -1385,6 +1397,9 @@ class LyricsOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        lyricsGeneration++
+        lyricsRequest?.cancel(true)
+        lyricsWorker.shutdownNow()
         if (activeServiceInstance === this) activeServiceInstance = null
         stopRealtimeSync()
         hideOverlayViewOnly()

@@ -28,7 +28,8 @@ final dioClientProvider = Provider<Dio>((ref) {
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
       headers: {
-        'User-Agent': 'FlashLyrics/1.4.2 (https://github.com/Avaneesh-Inamdar/FlashLyrics)',
+        'User-Agent':
+            'FlashLyrics/1.4.3 (https://github.com/Avaneesh-Inamdar/FlashLyrics)',
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
         'Accept-Encoding': 'gzip, deflate',
@@ -87,10 +88,20 @@ final geniusLyricsDataSourceProvider = Provider<GeniusLyricsDataSource>((ref) {
 });
 
 /// Lyrics local data source provider
-final lyricsLocalDataSourceProvider = Provider<LyricsLocalDataSource>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return LyricsLocalDataSource(prefs);
-});
+final lyricsCacheRevisionProvider = StateProvider<int>((ref) => 0);
+
+final Provider<LyricsLocalDataSource> lyricsLocalDataSourceProvider =
+    Provider<LyricsLocalDataSource>((ref) {
+      final prefs = ref.watch(sharedPreferencesProvider);
+      var active = true;
+      ref.onDispose(() => active = false);
+      return LyricsLocalDataSource(
+        prefs,
+        onChanged: () {
+          if (active) ref.read(lyricsCacheRevisionProvider.notifier).state++;
+        },
+      );
+    });
 
 /// Lyrics repository provider
 final lyricsRepositoryProvider = Provider<LyricsRepository>((ref) {
@@ -146,12 +157,11 @@ final deleteCachedLyricsUseCaseProvider = Provider<DeleteCachedLyricsUseCase>((
 });
 
 /// Clear all cached lyrics use case provider
-final clearAllCachedLyricsUseCaseProvider = Provider<ClearAllCachedLyricsUseCase>((
-  ref,
-) {
-  final repository = ref.watch(lyricsRepositoryProvider);
-  return ClearAllCachedLyricsUseCase(repository);
-});
+final clearAllCachedLyricsUseCaseProvider =
+    Provider<ClearAllCachedLyricsUseCase>((ref) {
+      final repository = ref.watch(lyricsRepositoryProvider);
+      return ClearAllCachedLyricsUseCase(repository);
+    });
 
 /// Tab index state notifier for controlling bottom navigation
 class TabIndexNotifier extends StateNotifier<int> {

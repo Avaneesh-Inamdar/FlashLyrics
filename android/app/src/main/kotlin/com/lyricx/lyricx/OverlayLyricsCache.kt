@@ -5,19 +5,22 @@ package com.lyricx.lyricx
  * without needing Flutter to be in foreground. Updated from Flutter via MethodChannel.
  */
 object OverlayLyricsCache {
-    @Volatile var title: String = ""
-    @Volatile var artist: String = ""
-    @Volatile var lrc: String = ""
-    @Volatile var plain: String = ""
-    @Volatile var syncOffsetMs: Int = 0
+    data class Entry(val title: String = "", val artist: String = "",
+        val lrc: String = "", val plain: String = "", val offset: Int = 0)
+    @Volatile private var entry = Entry()
+    val title get() = entry.title
+    val artist get() = entry.artist
+    val lrc get() = entry.lrc
+    val plain get() = entry.plain
+    val syncOffsetMs get() = entry.offset
     @Volatile var seekEnabled: Boolean = false
 
+    fun snapshot(): Entry = entry
+
+    fun forSong(song: NativeSong): Entry? = entry.takeIf { song.matches(it.title, it.artist) }
+
     fun update(title: String, artist: String, lrcLyrics: String?, plainLyrics: String?, offset: Int, enableSeek: Boolean = seekEnabled) {
-        this.title = title
-        this.artist = artist
-        this.lrc = lrcLyrics ?: ""
-        this.plain = plainLyrics ?: ""
-        this.syncOffsetMs = offset
+        entry = Entry(title, artist, lrcLyrics ?: "", plainLyrics ?: "", offset)
         this.seekEnabled = enableSeek
     }
 

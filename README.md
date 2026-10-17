@@ -69,15 +69,17 @@ Spotify, YouTube Music, Apple Music and other Android players can work when they
 
 ## What’s new
 
-The current source is **1.4.2 · Android version code 13**. Published downloads are listed on the release page; Google Play availability follows its release rollout.
+The current source is **1.4.3 · Android version code 15**. Published downloads are listed on the release page; Google Play availability follows its release rollout.
 
 - Animated word highlighting with optional background timing upgrades.
+- Saved karaoke preference across songs and app restarts.
+- Native notification tracking and a matching-lyrics fallback when the main app is closed.
 - A compact listening screen with collapsible playback controls.
 - Search results can appear while slower providers are still responding.
 - Google Play update checks and notification guidance in Settings.
 - Refined Android edge-to-edge handling and lyrics layouts.
 
-See the [1.4.2 release notes](RELEASE-1.4.2.md) for validation and device-testing limitations.
+See the [1.4.3 release notes](RELEASE-1.4.3.md) for validation and device-testing limitations.
 
 ## Lyrics sources
 

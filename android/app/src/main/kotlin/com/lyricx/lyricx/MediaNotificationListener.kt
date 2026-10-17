@@ -30,10 +30,10 @@ import java.io.IOException
  * Detects music from Spotify, YouTube Music, Apple Music, and system media players.
  */
 class MediaNotificationListener : NotificationListenerService() {
-    
+
     companion object {
         private const val TAG = "MediaNotificationListener"
-        
+
         // Supported media player packages
         private val SUPPORTED_PACKAGES = setOf(
             // Major streaming services
@@ -54,7 +54,7 @@ class MediaNotificationListener : NotificationListenerService() {
             "com.audiomack",
             "com.mixcloud.player",
             "fm.last.android",
-            
+
             // Regional streaming
             "com.jio.media.jiobeats",
             "com.gaana",
@@ -73,7 +73,7 @@ class MediaNotificationListener : NotificationListenerService() {
             "jp.linecorp.linemusic",
             "com.naver.vibe",
             "com.iloen.melon",
-            
+
             // Device default players
             "com.sec.android.app.music",
             "com.samsung.android.app.music",
@@ -86,7 +86,7 @@ class MediaNotificationListener : NotificationListenerService() {
             "com.transsion.music",
             "com.realme.music",
             "com.vivo.music",
-            
+
             // Third-party players
             "org.videolan.vlc",
             "com.maxmpz.audioplayer",
@@ -103,7 +103,7 @@ class MediaNotificationListener : NotificationListenerService() {
             "com.joythis.joymusic",
             "com.flyingdog",
             "com.nox.evermusic",
-            
+
             // Podcasts & Other
             "com.audible.application",
             "com.google.android.apps.podcasts",
@@ -112,10 +112,10 @@ class MediaNotificationListener : NotificationListenerService() {
             "com.foobar2000.foobar2000",
             "com.shazam.android"
         )
-        
+
         // Static listener for Flutter communication
         var mediaUpdateListener: MediaUpdateListener? = null
-        
+
         // Check if service is running
         var isRunning = false
             private set
@@ -159,7 +159,7 @@ class MediaNotificationListener : NotificationListenerService() {
 
         // Reference to the service instance for refresh calls
         private var serviceInstance: MediaNotificationListener? = null
-        
+
         // Flag to force notification on next check (ignores debounce)
         private var forceNextNotification = false
 
@@ -171,12 +171,23 @@ class MediaNotificationListener : NotificationListenerService() {
             serviceInstance?.checkActiveSessions()
         }
     }
-    
+
     private var mediaSessionManager: MediaSessionManager? = null
     private var activeControllers = mutableMapOf<String, MediaController>()
+    private val controllerCallbacks = mutableMapOf<String, MediaController.Callback>()
+    private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { onActiveSessionsChanged(it) }
+    private var sessionsListenerRegistered = false
+    private var connected = false
+    private val sessionPoll = object : Runnable {
+        override fun run() {
+            if (!connected) return
+            checkActiveSessions()
+            handler.postDelayed(this, 3000L)
+        }
+    }
     private val handler = Handler(Looper.getMainLooper())
     private var lastNotifiedSong: String? = null
-    
+
     // Position tracking
     private var positionUpdateRunnable: Runnable? = null
     private var activePlayingController: MediaController? = null
@@ -184,7 +195,7 @@ class MediaNotificationListener : NotificationListenerService() {
     private var basePosition: Long = 0
     private var playbackSpeed: Float = 1.0f
     private var isPositionTrackingActive = false
-    
+
     interface MediaUpdateListener {
         fun onMediaUpdate(title: String?, artist: String?, album: String?, 
                          artworkUrl: String?, duration: Long, source: String?, isPlaying: Boolean,
@@ -192,7 +203,7 @@ class MediaNotificationListener : NotificationListenerService() {
         fun onPositionUpdate(position: Long, duration: Long, isPlaying: Boolean)
         fun onPlaybackStopped()
     }
-    
+
     override fun onCreate() {
         super.onCreate()
         isRunning = true
@@ -218,8 +229,13 @@ class MediaNotificationListener : NotificationListenerService() {
             nm.createNotificationChannel(channel)
         }
     }
-    
+
     override fun onDestroy() {
+        connected = false
+        handler.removeCallbacksAndMessages(null)
+        try { mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsListener) } catch (_: Exception) {}
+        sessionsListenerRegistered = false
+        clearCurrentPlayback()
         super.onDestroy()
         isRunning = false
         serviceInstance = null
@@ -227,34 +243,46 @@ class MediaNotificationListener : NotificationListenerService() {
         cleanupControllers()
         Log.d(TAG, "MediaNotificationListener destroyed")
     }
-    
+
     override fun onListenerConnected() {
         super.onListenerConnected()
         Log.d(TAG, "Listener connected")
+        connected = true
+        isRunning = true
         initializeMediaSessionManager()
+        handler.removeCallbacks(sessionPoll)
+        handler.postDelayed(sessionPoll, 3000L)
         // Check for active sessions immediately
         checkActiveSessions()
     }
-    
+
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         Log.d(TAG, "Listener disconnected")
+        connected = false
+        isRunning = false
+        handler.removeCallbacks(sessionPoll)
+        try { mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsListener) } catch (_: Exception) {}
+        sessionsListenerRegistered = false
         stopPositionTracking()
         cleanupControllers()
+        clearCurrentPlayback()
+        try { requestRebind(ComponentName(this, MediaNotificationListener::class.java)) } catch (_: Exception) {}
     }
-    
+
     private fun initializeMediaSessionManager() {
         try {
             mediaSessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
-            mediaSessionManager?.addOnActiveSessionsChangedListener(
-                { controllers -> onActiveSessionsChanged(controllers) },
-                ComponentName(this, MediaNotificationListener::class.java)
-            )
+            if (!sessionsListenerRegistered) {
+                mediaSessionManager?.addOnActiveSessionsChangedListener(
+                    sessionsListener, ComponentName(this, MediaNotificationListener::class.java), handler)
+                sessionsListenerRegistered = true
+            }
         } catch (e: SecurityException) {
             Log.e(TAG, "SecurityException: Need Notification Access permission", e)
         }
     }
-    
+
     private fun checkActiveSessions() {
         try {
             val controllers = mediaSessionManager?.getActiveSessions(
@@ -265,24 +293,56 @@ class MediaNotificationListener : NotificationListenerService() {
             Log.e(TAG, "Failed to get active sessions", e)
         }
     }
-    
+
     private fun onActiveSessionsChanged(controllers: List<MediaController>?) {
-        // Clear old controllers
-        cleanupControllers()
-        
-        controllers?.forEach { controller ->
-            val packageName = controller.packageName
-            if (SUPPORTED_PACKAGES.contains(packageName) || isMediaApp(packageName)) {
-                Log.d(TAG, "Registering controller for: $packageName")
-                activeControllers[packageName] = controller
-                controller.registerCallback(createCallback(packageName), handler)
-                
-                // Check current metadata
-                extractAndNotifyMetadata(controller, packageName)
+        val eligible = controllers.orEmpty().filter {
+            it.packageName != packageName && (SUPPORTED_PACKAGES.contains(it.packageName) || isMediaApp(it.packageName))
+        }.groupBy { it.packageName }.mapValues { (_, sessions) ->
+            sessions.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: sessions.first()
+        }
+        for ((pkg, controller) in activeControllers.toMap()) {
+            if (eligible[pkg]?.sessionToken != controller.sessionToken) {
+                controllerCallbacks.remove(pkg)?.let { controller.unregisterCallback(it) }
+                activeControllers.remove(pkg)
             }
         }
+        for ((pkg, controller) in eligible) {
+            if (activeControllers[pkg] == null) {
+                activeControllers[pkg] = controller
+                val callback = createCallback(pkg)
+                controllerCallbacks[pkg] = callback
+                controller.registerCallback(callback, handler)
+            }
+        }
+        publishBestController()
     }
-    
+
+    private fun publishBestController() {
+        val song = NativeSong.select(activeControllers.values.mapNotNull(NativePlayback::song), packageName)
+        val controller = song?.let { activeControllers[it.packageName] }
+        if (controller == null) {
+            stopPositionTracking()
+            clearCurrentPlayback()
+            mediaUpdateListener?.onPlaybackStopped()
+        } else {
+            extractAndNotifyMetadata(controller, controller.packageName)
+            if (song?.playing != true) stopPositionTracking()
+        }
+    }
+
+    private fun clearCurrentPlayback() {
+        currentTitle = null
+        currentArtist = null
+        currentAlbum = null
+        currentArtworkUrl = null
+        currentSource = null
+        currentPosition = 0
+        currentDuration = 0
+        currentIsPlaying = false
+        lastNotifiedSong = null
+        cancelMusicNotification()
+    }
+
     private fun isMediaApp(packageName: String): Boolean {
         // Broad check: any app that has a media session with audio-related name
         return packageName.contains("music", ignoreCase = true) || 
@@ -295,45 +355,13 @@ class MediaNotificationListener : NotificationListenerService() {
                packageName.contains("tune", ignoreCase = true) ||
                packageName.contains("stream", ignoreCase = true)
     }
-    
-    private fun createCallback(packageName: String): MediaController.Callback {
-        return object : MediaController.Callback() {
-            override fun onMetadataChanged(metadata: MediaMetadata?) {
-                Log.d(TAG, "Metadata changed for $packageName")
-                activeControllers[packageName]?.let { controller ->
-                    extractAndNotifyMetadata(controller, packageName)
-                }
-            }
-            
-            override fun onPlaybackStateChanged(state: PlaybackState?) {
-                Log.d(TAG, "Playback state changed for $packageName: ${state?.state}")
-                activeControllers[packageName]?.let { controller ->
-                    if (state?.state == PlaybackState.STATE_PLAYING) {
-                        extractAndNotifyMetadata(controller, packageName)
-                        startPositionTracking(controller)
-                    } else if (state?.state == PlaybackState.STATE_PAUSED || 
-                               state?.state == PlaybackState.STATE_STOPPED) {
-                        // Still notify with playing = false
-                        extractAndNotifyMetadata(controller, packageName)
-                        if (state?.state == PlaybackState.STATE_PAUSED) {
-                            // Update position one last time but stop tracking
-                            updatePositionFromState(state)
-                            stopPositionTracking()
-                            // Send final position update
-                            mediaUpdateListener?.onPositionUpdate(
-                                currentPosition,
-                                currentDuration,
-                                false
-                            )
-                        } else {
-                            stopPositionTracking()
-                        }
-                    }
-                }
-            }
-        }
+
+    private fun createCallback(packageName: String): MediaController.Callback = object : MediaController.Callback() {
+        override fun onMetadataChanged(metadata: MediaMetadata?) = publishBestController()
+        override fun onPlaybackStateChanged(state: PlaybackState?) = publishBestController()
+        override fun onSessionDestroyed() { checkActiveSessions() }
     }
-    
+
     /**
      * Start periodic position tracking for the active controller.
      * Uses Handler.postDelayed to send position updates every POSITION_UPDATE_INTERVAL ms.
@@ -343,43 +371,43 @@ class MediaNotificationListener : NotificationListenerService() {
         if (isPositionTrackingActive && activePlayingController == controller) {
             return
         }
-        
+
         stopPositionTracking()
         activePlayingController = controller
         isPositionTrackingActive = true
-        
+
         // Initialize position from current state
         controller.playbackState?.let { state ->
             updatePositionFromState(state)
         }
-        
+
         positionUpdateRunnable = object : Runnable {
             override fun run() {
                 if (!isPositionTrackingActive) return
-                
+
                 // Calculate current position
                 val currentPos = calculateCurrentPosition()
                 currentPosition = currentPos
-                
+
                 // Send position update to Flutter
                 mediaUpdateListener?.onPositionUpdate(
                     currentPos,
                     currentDuration,
                     currentIsPlaying
                 )
-                
+
                 // Schedule next update
                 if (isPositionTrackingActive && currentIsPlaying) {
                     handler.postDelayed(this, POSITION_UPDATE_INTERVAL)
                 }
             }
         }
-        
+
         // Start the periodic updates
         handler.post(positionUpdateRunnable!!)
         Log.d(TAG, "Started position tracking")
     }
-    
+
     /**
      * Stop position tracking when playback stops or pauses.
      */
@@ -390,7 +418,7 @@ class MediaNotificationListener : NotificationListenerService() {
         activePlayingController = null
         Log.d(TAG, "Stopped position tracking")
     }
-    
+
     /**
      * Update base position values from PlaybackState.
      * Called when PlaybackState changes to sync our tracking.
@@ -400,15 +428,15 @@ class MediaNotificationListener : NotificationListenerService() {
         lastPositionUpdateTime = state.lastPositionUpdateTime
         playbackSpeed = state.playbackSpeed
         currentPlaybackSpeed = playbackSpeed
-        
+
         // Handle apps that report 0 or negative speed
         if (playbackSpeed <= 0) {
             playbackSpeed = 1.0f
         }
-        
+
         Log.d(TAG, "Position state updated: pos=$basePosition, speed=$playbackSpeed")
     }
-    
+
     /**
      * Calculate the current playback position based on elapsed time.
      * Formula: position + (currentTime - lastUpdateTime) * playbackSpeed
@@ -420,7 +448,7 @@ class MediaNotificationListener : NotificationListenerService() {
         if (!currentIsPlaying) {
             return basePosition
         }
-        
+
         // Get fresh state if available
         activePlayingController?.playbackState?.let { state ->
             // If the state has been updated recently, use it directly
@@ -428,13 +456,13 @@ class MediaNotificationListener : NotificationListenerService() {
                 updatePositionFromState(state)
             }
         }
-        
+
         val currentTime = SystemClock.elapsedRealtime()
         val elapsedSinceUpdate = currentTime - lastPositionUpdateTime
-        
+
         // Calculate extrapolated position
         val calculatedPosition = basePosition + (elapsedSinceUpdate * playbackSpeed).toLong()
-        
+
         // Clamp to valid range (0 to duration)
         return when {
             calculatedPosition < 0 -> 0
@@ -442,18 +470,18 @@ class MediaNotificationListener : NotificationListenerService() {
             else -> calculatedPosition
         }
     }
-    
+
     private fun extractAndNotifyMetadata(controller: MediaController, packageName: String) {
         val metadata = controller.metadata ?: return
         val playbackState = controller.playbackState
         val isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING
-        
+
         val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE)
         val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) 
                   ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
         val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM)
         val duration = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION)
-        
+
         // Get album art URI or bitmap if available - comprehensive key fallback for older Android
         var artworkUri = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
             ?: metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)
@@ -461,12 +489,33 @@ class MediaNotificationListener : NotificationListenerService() {
         var artworkBitmap = try { metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) } catch (_: Exception) { null }
             ?: try { metadata.getBitmap(MediaMetadata.METADATA_KEY_ART) } catch (_: Exception) { null }
             ?: try { metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) } catch (_: Exception) { null }
-        
+
         // Get current position from playback state
         val position = playbackState?.position ?: 0L
-        
+
         if (title.isNullOrEmpty() || artist.isNullOrEmpty()) {
             Log.d(TAG, "Incomplete metadata, skipping")
+            return
+        }
+
+        // Get friendly source name early for notification
+        val source = getSourceName(packageName)
+
+        // Debounce - only skip Flutter callback if exact same notification
+        val songKey = "$title|$artist"
+        val isSameSong = songKey == lastNotifiedSong
+
+        // Always ensure notification is shown for music services even when debounced for Flutter
+        // (battery-efficient but visible)
+        if (isSameSong && isPlaying == currentIsPlaying && !forceNextNotification) {
+            currentDuration = duration
+            currentPosition = position
+            playbackState?.let { updatePositionFromState(it) }
+            // Still show/update notification for same song (strict music only)
+            showMusicNotification(title, artist, source, isPlaying, packageName)
+            if (isPlaying) {
+                startPositionTracking(controller)
+            }
             return
         }
 
@@ -480,30 +529,15 @@ class MediaNotificationListener : NotificationListenerService() {
             val cachedBmp = cacheArtworkBitmap(artworkBitmap, title, artist)
             if (cachedBmp != null) artworkUri = cachedBmp
         }
-        
-        // Get friendly source name early for notification
-        val source = getSourceName(packageName)
 
-        // Debounce - only skip Flutter callback if exact same notification
-        val songKey = "$title|$artist"
-        val isSameSong = songKey == lastNotifiedSong
-
-        // Always ensure notification is shown for music services even when debounced for Flutter
-        // (battery-efficient but visible)
-        if (isSameSong && isPlaying == currentIsPlaying && mediaUpdateListener != null && !forceNextNotification) {
-            // Still show/update notification for same song (strict music only)
-            showMusicNotification(title, artist, source, isPlaying, packageName)
-            if (isPlaying) {
-                startPositionTracking(controller)
-            }
-            return
-        }
-        
         // Reset force flag after we use it
         forceNextNotification = false
         lastNotifiedSong = songKey
-        
+
         val songChanged = (currentTitle != title || currentArtist != artist)
+        if (songChanged && !OverlayLyricsCache.matches(title, artist)) {
+            OverlayLyricsCache.update(title, artist, "", "", 0)
+        }
 
         // Store current song data for retrieval on app restart
         currentTitle = title
@@ -514,15 +548,15 @@ class MediaNotificationListener : NotificationListenerService() {
         currentSource = source
         currentIsPlaying = isPlaying
         currentPosition = position
-        
+
         // Update position tracking state if we have playback state
         playbackState?.let { updatePositionFromState(it) }
-        
+
         // Start position tracking if song is playing
         if (isPlaying) {
             startPositionTracking(controller)
         }
-        
+
         Log.d(TAG, "Notifying: $title by $artist from $source (playing: $isPlaying, pos: ${position}ms)")
         // Battery-efficient notification only for strict music package + playing
         showMusicNotification(title, artist, source, isPlaying, packageName)
@@ -588,7 +622,7 @@ class MediaNotificationListener : NotificationListenerService() {
             null
         }
     }
-    
+
     private fun getSourceName(packageName: String): String {
         return when (packageName) {
             // Major streaming
@@ -601,14 +635,14 @@ class MediaNotificationListener : NotificationListenerService() {
             "deezer.android.app" -> "Deezer"
             "com.pandora.android" -> "Pandora"
             "com.aspiro.tidal", "com.tidal.music" -> "Tidal"
-            
+
             // Regional
             "com.jio.media.jiobeats" -> "JioSaavn"
             "com.gaana" -> "Gaana"
             "com.bsbportal.music" -> "Wynk Music"
             "com.hungama.myplay.activity" -> "Hungama"
             "com.qobuz.music" -> "Qobuz"
-            
+
             // Device players
             "com.sec.android.app.music", "com.samsung.android.app.music" -> "Samsung Music"
             "com.google.android.music" -> "Google Play Music"
@@ -616,7 +650,7 @@ class MediaNotificationListener : NotificationListenerService() {
             "com.oppo.music" -> "OPPO Music"
             "com.oneplus.music" -> "OnePlus Music"
             "com.huawei.music" -> "Huawei Music"
-            
+
             // Third-party
             "org.videolan.vlc" -> "VLC"
             "com.maxmpz.audioplayer" -> "Poweramp"
@@ -627,7 +661,7 @@ class MediaNotificationListener : NotificationListenerService() {
             "com.bandcamp.android" -> "Bandcamp"
             "com.audible.application" -> "Audible"
             "com.foobar2000.foobar2000" -> "foobar2000"
-            
+
             else -> "Media Player"
         }
     }
@@ -648,23 +682,24 @@ class MediaNotificationListener : NotificationListenerService() {
     private fun cancelMusicNotification() {
         MusicNotificationManager.cancelMusicNotification(this)
     }
-    
+
     private fun cleanupControllers() {
-        activeControllers.forEach { (_, controller) ->
+        activeControllers.forEach { (pkg, controller) ->
             try {
-                // Unregister callbacks if possible
+                controllerCallbacks[pkg]?.let { controller.unregisterCallback(it) }
             } catch (e: Exception) {
                 Log.e(TAG, "Error cleaning up controller", e)
             }
         }
         activeControllers.clear()
+        controllerCallbacks.clear()
     }
-    
+
     // Handle notification posted (fallback for some players)
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
         sbn?.let {
-            if (SUPPORTED_PACKAGES.contains(it.packageName)) {
+            if (it.packageName != packageName && (SUPPORTED_PACKAGES.contains(it.packageName) || isMediaApp(it.packageName))) {
                 // Trigger session check when media notification posted
                 handler.postDelayed({ checkActiveSessions() }, 100)
             }

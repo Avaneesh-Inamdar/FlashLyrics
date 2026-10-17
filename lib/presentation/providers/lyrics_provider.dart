@@ -46,6 +46,9 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
   final SearchLyricsUseCase _searchLyricsUseCase;
   final GetCachedLyricsUseCase _getCachedLyricsUseCase;
   final List<String> _providerPriority;
+  final Future<Lyrics?> Function(Song)? _findWordLyrics;
+  final Future<void> Function(Lyrics)? _cacheWordLyrics;
+  final Set<String> _wordLookupAttempted = {};
   int _latestSearchId = 0; // Track latest search to prevent race conditions
   int _latestSongRequestId = 0;
 
@@ -54,21 +57,30 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
     required SearchLyricsUseCase searchLyricsUseCase,
     required GetCachedLyricsUseCase getCachedLyricsUseCase,
     required List<String> providerPriority,
+    Future<Lyrics?> Function(Song)? findWordLyrics,
+    Future<void> Function(Lyrics)? cacheWordLyrics,
   }) : _getLyricsUseCase = getLyricsUseCase,
        _searchLyricsUseCase = searchLyricsUseCase,
        _getCachedLyricsUseCase = getCachedLyricsUseCase,
        _providerPriority = providerPriority,
+       _findWordLyrics = findWordLyrics,
+       _cacheWordLyrics = cacheWordLyrics,
        super(const LyricsState());
 
   /// Set current song and fetch lyrics
   Future<void> setSong(Song song, {bool forceRefresh = false}) async {
     final current = state.currentSong;
-    if (!forceRefresh && state.isLoading && current != null &&
-        songKey(current.artist, current.title) == songKey(song.artist, song.title)) {
+    if (!forceRefresh &&
+        state.isLoading &&
+        current != null &&
+        songKey(current.artist, current.title) ==
+            songKey(song.artist, song.title)) {
       return;
     }
     ++_latestSearchId;
     final requestId = ++_latestSongRequestId;
+    if (forceRefresh)
+      _wordLookupAttempted.remove(songKey(song.artist, song.title));
     if (kDebugMode) {
       debugPrint('🎵 Fetching lyrics for: ${song.title} by ${song.artist}');
     }
@@ -130,6 +142,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
               debugPrint('✅ Using cached lyrics for ${song.title}');
             if (requestId != _latestSongRequestId) return;
             state = state.copyWith(lyrics: cached, isLoading: false);
+            unawaited(_upgradeWords(song, cached, requestId));
             return;
           }
         }
@@ -159,6 +172,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       // overwrite lyrics for the song that is now playing.
       if (requestId != _latestSongRequestId) return;
       state = state.copyWith(lyrics: lyrics, isLoading: false);
+      unawaited(_upgradeWords(song, lyrics, requestId));
     } catch (e) {
       if (requestId != _latestSongRequestId) return;
       if (kDebugMode) debugPrint('❌ Error fetching lyrics: $e');
@@ -211,6 +225,9 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
             album: null,
           ),
         );
+        unawaited(
+          _upgradeWords(state.currentSong!, lyrics, _latestSongRequestId),
+        );
       }
     } catch (e) {
       // Only update state if this is still the latest search
@@ -251,15 +268,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       source: 'Search',
     );
 
-    final lyrics = Lyrics(
-      id: model.id,
-      songId: model.songId,
-      plainLyrics: model.plainLyrics,
-      lrcLyrics: model.lrcLyrics,
-      isSynced: model.isSynced,
-      source: model.source,
-      fetchedAt: model.fetchedAt,
-    );
+    final lyrics = model;
 
     state = LyricsState(
       currentSong: song,
@@ -267,6 +276,42 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       isLoading: false,
       error: null,
     );
+    unawaited(_saveSelectedLyrics(model));
+    unawaited(_upgradeWords(song, lyrics, _latestSongRequestId));
+  }
+
+  Future<void> _saveSelectedLyrics(LyricsModel model) async {
+    try {
+      await _cacheWordLyrics?.call(model);
+    } catch (error) {
+      if (kDebugMode) debugPrint('Could not cache selected lyrics: $error');
+    }
+  }
+
+  Future<void> _upgradeWords(Song song, Lyrics original, int requestId) async {
+    if (_findWordLyrics == null ||
+        !_providerPriority.contains('lrclib') ||
+        original.lrcLyrics?.contains(RegExp(r'<\d{1,3}:\d{2}')) == true)
+      return;
+    final key = songKey(song.artist, song.title);
+    if (_wordLookupAttempted.contains(key)) return;
+    if (_wordLookupAttempted.length >= 64)
+      _wordLookupAttempted.remove(_wordLookupAttempted.first);
+    _wordLookupAttempted.add(key);
+    try {
+      final upgraded = await _findWordLyrics(song);
+      if (!mounted ||
+          requestId != _latestSongRequestId ||
+          upgraded == null ||
+          upgraded.songId != key ||
+          state.lyrics != original ||
+          state.isLoading)
+        return;
+      state = state.copyWith(lyrics: upgraded);
+      await _cacheWordLyrics?.call(upgraded);
+    } catch (_) {
+      // Enrichment is optional and never clears the first lyrics result.
+    }
   }
 
   /// Clear lyrics
@@ -288,11 +333,17 @@ final lyricsNotifierProvider =
         searchLyricsUseCase: ref.watch(searchLyricsUseCaseProvider),
         getCachedLyricsUseCase: ref.watch(getCachedLyricsUseCaseProvider),
         providerPriority: providerPriority,
+        findWordLyrics: (song) => ref
+            .read(lyricsRemoteDataSourceProvider)
+            .findWordSyncedLyrics(song.artist, song.title),
+        cacheWordLyrics: (lyrics) =>
+            ref.read(lyricsRepositoryProvider).cacheLyrics(lyrics),
       );
     });
 
 /// Cached lyrics list provider
 final cachedLyricsProvider = FutureProvider<List<Lyrics>>((ref) async {
+  ref.watch(lyricsCacheRevisionProvider);
   final repository = ref.watch(lyricsRepositoryProvider);
   return repository.getAllCachedLyrics();
 });

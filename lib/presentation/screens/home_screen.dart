@@ -290,6 +290,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // Song controls with seek bar + next/prev
             if (hasMediaSong)
               ExpansionTile(
+                shape: const Border(),
+                collapsedShape: const Border(),
                 title: const Text('Playback controls'),
                 leading: const Icon(Icons.tune_rounded),
                 dense: true,

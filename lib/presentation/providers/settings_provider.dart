@@ -11,20 +11,24 @@ class AppSettings {
   final double fontSize;
   final bool autoRefresh;
   final bool showSyncedLyrics;
+  final bool karaokeEnabled;
   final bool keepScreenOn;
   final bool floatingLyricsEnabled; // Enable floating overlay/PIP
-  final bool floatingOverlaySeekEnabled; // Allow scrolling & tap-to-seek in overlay
+  final bool
+  floatingOverlaySeekEnabled; // Allow scrolling & tap-to-seek in overlay
   final ThemeModeOption themeMode;
   final List<String> providerPriority;
   final String accentColor;
   final int lyricsSyncOffset; // Offset in milliseconds for lyrics sync
   final bool enableAds; // Toggle Google Mobile Ads (AdMob)
-  final bool useTestAds; // Use Google sample/test banner ads (useful until account is approved)
+  final bool
+  useTestAds; // Use Google sample/test banner ads (useful until account is approved)
 
   const AppSettings({
     this.fontSize = 18.0,
     this.autoRefresh = true,
     this.showSyncedLyrics = true,
+    this.karaokeEnabled = false,
     this.keepScreenOn = false,
     this.floatingLyricsEnabled = false,
     this.floatingOverlaySeekEnabled = false,
@@ -78,6 +82,7 @@ class AppSettings {
     double? fontSize,
     bool? autoRefresh,
     bool? showSyncedLyrics,
+    bool? karaokeEnabled,
     bool? keepScreenOn,
     bool? floatingLyricsEnabled,
     bool? floatingOverlaySeekEnabled,
@@ -92,9 +97,12 @@ class AppSettings {
       fontSize: fontSize ?? this.fontSize,
       autoRefresh: autoRefresh ?? this.autoRefresh,
       showSyncedLyrics: showSyncedLyrics ?? this.showSyncedLyrics,
+      karaokeEnabled: karaokeEnabled ?? this.karaokeEnabled,
       keepScreenOn: keepScreenOn ?? this.keepScreenOn,
-      floatingLyricsEnabled: floatingLyricsEnabled ?? this.floatingLyricsEnabled,
-      floatingOverlaySeekEnabled: floatingOverlaySeekEnabled ?? this.floatingOverlaySeekEnabled,
+      floatingLyricsEnabled:
+          floatingLyricsEnabled ?? this.floatingLyricsEnabled,
+      floatingOverlaySeekEnabled:
+          floatingOverlaySeekEnabled ?? this.floatingOverlaySeekEnabled,
       enableAds: enableAds ?? this.enableAds,
       useTestAds: useTestAds ?? this.useTestAds,
       themeMode: themeMode ?? this.themeMode,
@@ -108,6 +116,7 @@ class AppSettings {
     'fontSize': fontSize,
     'autoRefresh': autoRefresh,
     'showSyncedLyrics': showSyncedLyrics,
+    'karaokeEnabled': karaokeEnabled,
     'keepScreenOn': keepScreenOn,
     'floatingLyricsEnabled': floatingLyricsEnabled,
     'floatingOverlaySeekEnabled': floatingOverlaySeekEnabled,
@@ -139,9 +148,11 @@ class AppSettings {
       fontSize: (json['fontSize'] as num?)?.toDouble() ?? 18.0,
       autoRefresh: json['autoRefresh'] as bool? ?? true,
       showSyncedLyrics: json['showSyncedLyrics'] as bool? ?? true,
+      karaokeEnabled: json['karaokeEnabled'] as bool? ?? false,
       keepScreenOn: json['keepScreenOn'] as bool? ?? false,
       floatingLyricsEnabled: json['floatingLyricsEnabled'] as bool? ?? false,
-      floatingOverlaySeekEnabled: json['floatingOverlaySeekEnabled'] as bool? ?? false,
+      floatingOverlaySeekEnabled:
+          json['floatingOverlaySeekEnabled'] as bool? ?? false,
       enableAds: json['enableAds'] as bool? ?? true,
       useTestAds: json['useTestAds'] as bool? ?? false,
       themeMode: parseThemeMode(json['themeMode']),
@@ -203,6 +214,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   Future<void> _saveSettings() async {
     await _prefs.setString(_settingsKey, jsonEncode(state.toJson()));
+  }
+
+  Future<void> setKaraokeEnabled(bool enabled) async {
+    state = state.copyWith(karaokeEnabled: enabled);
+    await _saveSettings();
   }
 
   void setFontSize(double size) {

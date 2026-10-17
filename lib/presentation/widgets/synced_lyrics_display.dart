@@ -1,17 +1,20 @@
 import 'dart:ui';
-import 'dart:async';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/lrc_parser.dart';
 import 'quick_offset_adjuster.dart';
+import 'karaoke_line.dart';
+import '../../core/utils/karaoke_timing.dart';
 
 /// Widget to display synchronized lyrics with Apple Music-style smooth scrolling
 class SyncedLyricsDisplay extends StatefulWidget {
   final String lrcContent;
   final Duration currentPosition;
   final bool isPlaying;
+  final bool estimateWordTiming;
   final ValueChanged<Duration>? onSeek;
   final double fontSize;
   final int syncOffsetMs; // User-configurable sync offset in milliseconds
@@ -23,6 +26,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
     required this.lrcContent,
     required this.currentPosition,
     this.isPlaying = false,
+    this.estimateWordTiming = false,
     this.onSeek,
     this.fontSize = 22.0,
     this.syncOffsetMs = 0,
@@ -33,13 +37,16 @@ class SyncedLyricsDisplay extends StatefulWidget {
   State<SyncedLyricsDisplay> createState() => _SyncedLyricsDisplayState();
 }
 
-class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
+class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
+    with SingleTickerProviderStateMixin {
   ParsedLrc? _parsedLrc;
   int _currentLineIndex = -1;
   final ScrollController _scrollController = ScrollController();
   double _viewportPadding = 160.0;
   bool _didInitialScroll = false;
-  Timer? _wordClock;
+  late final Ticker _wordClock;
+  late final ValueNotifier<Duration> _paintPosition;
+  bool _hasWords = false;
   int _elapsedMs = 0;
   int _parseGeneration = 0;
   List<double> _lineHeights = [];
@@ -66,24 +73,24 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
   @override
   void initState() {
     super.initState();
+    _paintPosition = ValueNotifier(widget.currentPosition);
+    _wordClock = createTicker((elapsed) {
+      if (!_hasWords && !widget.estimateWordTiming) return;
+      _elapsedMs = elapsed.inMilliseconds.clamp(0, 1500);
+      _paintPosition.value = _position;
+      _updateCurrentLine();
+      if (elapsed.inMilliseconds >= 1500) _wordClock.stop();
+    });
     _parseLrc();
     _wasPlaying = widget.isPlaying;
     _startWordClock();
   }
 
   void _startWordClock() {
-    _wordClock?.cancel();
-    if (!widget.isPlaying) return;
-    _wordClock = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (!mounted ||
-          !TickerMode.valuesOf(context).enabled ||
-          _elapsedMs >= 1000 ||
-          !(_parsedLrc?.lines.any((line) => line.words.isNotEmpty) ?? false)) {
-        return;
-      }
-      setState(() => _elapsedMs += 100);
-      _updateCurrentLine();
-    });
+    _wordClock.stop();
+    _paintPosition.value = _position;
+    if (widget.isPlaying && (_hasWords || widget.estimateWordTiming))
+      _wordClock.start();
   }
 
   @override
@@ -91,7 +98,8 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentPosition != widget.currentPosition ||
         oldWidget.isPlaying != widget.isPlaying ||
-        oldWidget.lrcContent != widget.lrcContent) {
+        oldWidget.lrcContent != widget.lrcContent ||
+        oldWidget.estimateWordTiming != widget.estimateWordTiming) {
       _elapsedMs = 0;
       _startWordClock();
     }
@@ -103,6 +111,9 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
     if (oldWidget.lrcContent != widget.lrcContent) {
       _didInitialScroll = false;
+      _parsedLrc = null;
+      _hasWords = false;
+      _currentLineIndex = -1;
       _parseLrc();
     }
 
@@ -116,7 +127,8 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     _wasPlaying = widget.isPlaying;
 
     if ((oldWidget.currentPosition != widget.currentPosition ||
-            oldWidget.syncOffsetMs != widget.syncOffsetMs) &&
+            oldWidget.syncOffsetMs != widget.syncOffsetMs ||
+            oldWidget.estimateWordTiming != widget.estimateWordTiming) &&
         _parsedLrc != null) {
       _updateCurrentLine();
     }
@@ -126,10 +138,11 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
     final generation = ++_parseGeneration;
     final parsed = await LrcParser.parse(widget.lrcContent);
     if (mounted && generation == _parseGeneration) {
+      _hasWords = parsed.lines.any((l) => l.words.isNotEmpty);
       final initialIndex = parsed.getLineIndexAtTime(
         widget.currentPosition +
             Duration(milliseconds: widget.syncOffsetMs) +
-            (parsed.lines.any((l) => l.words.isNotEmpty)
+            (_hasWords || widget.estimateWordTiming
                 ? Duration.zero
                 : _baseSyncLeadTime),
       );
@@ -138,6 +151,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
         _measuredWidth = -1;
         _currentLineIndex = initialIndex;
       });
+      _startWordClock();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _didInitialScroll) return;
         _didInitialScroll = true;
@@ -202,7 +216,7 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
   Duration _applyLeadTime(Duration position) {
     return position +
-        (_parsedLrc?.lines.any((l) => l.words.isNotEmpty) == true
+        (_hasWords || widget.estimateWordTiming
             ? Duration(milliseconds: widget.syncOffsetMs)
             : _syncLeadTime);
   }
@@ -216,7 +230,8 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
 
   @override
   void dispose() {
-    _wordClock?.cancel();
+    _wordClock.dispose();
+    _paintPosition.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -487,36 +502,35 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay> {
       final currentLineColor = isDark
           ? AppTheme.textPrimary
           : AppTheme.lightTextPrimary;
-      if (line.words.isNotEmpty) {
-        final position =
-            _position +
-            Duration(milliseconds: widget.syncOffsetMs) -
-            (_parsedLrc?.offset ?? Duration.zero);
+      final nextIndex = _currentLineIndex + 1;
+      final lineEnd = nextIndex < _parsedLrc!.lines.length
+          ? _parsedLrc!.lines[nextIndex].timestamp
+          : null;
+      final words = widget.estimateWordTiming
+          ? estimateWords(line, lineEnd)
+          : line.words;
+      if (words.isNotEmpty) {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text.rich(
-            TextSpan(
-              children: line.words.map((word) {
-                final sung = position >= word.start;
-                final active =
-                    sung && (word.end == null || position < word.end!);
-                return TextSpan(
-                  text: word.text,
-                  style: TextStyle(
-                    color: active
-                        ? (isDark ? AppTheme.primaryLight : AppTheme.primaryColor)
-                        : currentLineColor.withValues(alpha: sung ? 1 : 0.35),
-                  ),
-                );
-              }).toList(),
-            ),
+          child: KaraokeLine(
             key: const ValueKey('word-synced-line'),
-            style: TextStyle(
+            line: LrcLine(
+              timestamp: line.timestamp,
+              text: line.text,
+              words: words,
+            ),
+            position: _paintPosition,
+            offset:
+                Duration(milliseconds: widget.syncOffsetMs) -
+                (_parsedLrc?.offset ?? Duration.zero),
+            lineEnd: lineEnd,
+            style: DefaultTextStyle.of(context).style.copyWith(
               fontSize: currentFontSize,
               fontWeight: FontWeight.w700,
               height: 1.35,
             ),
-            textAlign: TextAlign.center,
+            color: currentLineColor,
+            reduceMotion: MediaQuery.disableAnimationsOf(context),
           ),
         );
       }

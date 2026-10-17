@@ -103,6 +103,15 @@ class SettingsScreen extends ConsumerWidget {
                         _buildDivider(context),
                         _buildSwitchTile(
                           context,
+                          icon: Icons.auto_awesome_rounded,
+                          title: 'Karaoke Mode',
+                          subtitle: 'Estimate word timing for line-synced songs',
+                          value: settings.karaokeEnabled,
+                          onChanged: (value) => ref.read(settingsProvider.notifier).setKaraokeEnabled(value),
+                        ),
+                        _buildDivider(context),
+                        _buildSwitchTile(
+                          context,
                           icon: Icons.light_mode_rounded,
                           title: 'Keep Screen On',
                           subtitle:

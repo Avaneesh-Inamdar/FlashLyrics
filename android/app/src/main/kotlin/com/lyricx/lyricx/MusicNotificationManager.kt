@@ -100,12 +100,7 @@ object MusicNotificationManager {
             // Float action via FloatTrampolineActivity
             val floatIntent = Intent(context, FloatTrampolineActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("title", title)
-                putExtra("artist", artist)
-                putExtra("lyrics", OverlayLyricsCache.plain)
-                putExtra("lrcLyrics", OverlayLyricsCache.lrc)
-                putExtra("syncOffsetMs", OverlayLyricsCache.syncOffsetMs)
-                putExtra("enableSeek", OverlayLyricsCache.seekEnabled)
+                // Resolve the active session on tap, not this captured song/cache.
             }
             val floatPending = PendingIntent.getActivity(
                 context, 101, floatIntent,

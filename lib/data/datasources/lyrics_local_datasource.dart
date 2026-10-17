@@ -2,140 +2,104 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/lyrics_model.dart';
 
-/// Local data source for caching lyrics
+/// Stores lyrics using the existing on-device cache format.
 class LyricsLocalDataSource {
   static const String _lyricsCacheKey = 'lyrics_cache';
   final SharedPreferences _prefs;
+  final void Function()? onChanged;
+  Future<void> _pendingWrite = Future<void>.value();
 
-  LyricsLocalDataSource(this._prefs);
+  LyricsLocalDataSource(this._prefs, {this.onChanged});
 
-  /// Get cached lyrics by song ID
-  LyricsModel? getCachedLyrics(String songId) {
-    final cachedData = _prefs.getString(_lyricsCacheKey);
-    if (cachedData == null) return null;
-
+  Map<String, dynamic> _readCache() {
     try {
-      final Map<String, dynamic> cache = jsonDecode(cachedData);
-      if (cache.containsKey(songId)) {
-        return LyricsModel.fromJson(cache[songId] as Map<String, dynamic>);
-      }
-    } catch (e) {
-      // Cache corrupted, clear it
-      _clearCache();
+      final raw = _prefs.getString(_lyricsCacheKey);
+      return raw == null
+          ? {}
+          : Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return {};
     }
-    return null;
   }
 
-  /// Save lyrics to cache with LRU eviction (max ~3MB / 100 entries)
-  Future<void> cacheLyrics(LyricsModel lyrics) async {
-    final cachedData = _prefs.getString(_lyricsCacheKey);
-    Map<String, dynamic> cache = {};
-
-    if (cachedData != null) {
-      try {
-        cache = jsonDecode(cachedData) as Map<String, dynamic>;
-      } catch (e) {
-        cache = {};
-      }
+  LyricsModel? _decode(dynamic entry) {
+    try {
+      if (entry is! Map) return null;
+      return LyricsModel.fromJson(Map<String, dynamic>.from(entry));
+    } catch (_) {
+      // One damaged entry must not erase every other saved song.
+      return null;
     }
+  }
 
-    // LRU: move existing to end (newest)
+  LyricsModel? getCachedLyrics(String songId) => _decode(_readCache()[songId]);
+
+  Future<void> _write(Future<void> Function() operation) {
+    final result = _pendingWrite.then((_) => operation());
+    _pendingWrite = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
+
+  Future<void> cacheLyrics(LyricsModel lyrics) => _write(() async {
+    if (lyrics.songId.isEmpty ||
+        (lyrics.plainLyrics.trim().isEmpty &&
+            (lyrics.lrcLyrics?.trim().isEmpty ?? true)))
+      return;
+    final cache = _readCache();
     cache.remove(lyrics.songId);
     cache[lyrics.songId] = lyrics.toJson();
-
-    // Enforce limits: max 100 entries, max ~3MB
-    const maxEntries = 100;
-    const maxBytes = 3 * 1024 * 1024;
-    // Evict oldest if over entry limit
-    while (cache.length > maxEntries) {
+    while (cache.length > 100) {
       cache.remove(cache.keys.first);
     }
-    // Evict until under byte limit
-    String encoded = jsonEncode(cache);
-    while (encoded.length > maxBytes && cache.length > 20) {
+    var encoded = jsonEncode(cache);
+    while (utf8.encode(encoded).length > 3 * 1024 * 1024 && cache.length > 20) {
       cache.remove(cache.keys.first);
       encoded = jsonEncode(cache);
     }
-    await _prefs.setString(_lyricsCacheKey, encoded);
-  }
-
-  /// Get all cached lyrics
-  List<LyricsModel> getAllCachedLyrics() {
-    final cachedData = _prefs.getString(_lyricsCacheKey);
-    if (cachedData == null) return [];
-
-    try {
-      final Map<String, dynamic> cache = jsonDecode(cachedData);
-      return cache.values
-          .map((e) => LyricsModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      return [];
+    if (!await _prefs.setString(_lyricsCacheKey, encoded)) {
+      throw StateError('Could not save lyrics on this device');
     }
-  }
+    onChanged?.call();
+  });
 
-  /// Delete cached lyrics
-  Future<void> deleteCachedLyrics(String lyricsId) async {
-    final cachedData = _prefs.getString(_lyricsCacheKey);
-    if (cachedData == null) return;
+  List<LyricsModel> getAllCachedLyrics() =>
+      _readCache().values.map(_decode).whereType<LyricsModel>().toList();
 
-    try {
-      final Map<String, dynamic> cache = jsonDecode(cachedData);
-      cache.remove(lyricsId);
-      await _prefs.setString(_lyricsCacheKey, jsonEncode(cache));
-    } catch (e) {
-      // Ignore errors
+  Future<void> deleteCachedLyrics(String songId) => _write(() async {
+    final cache = _readCache()..remove(songId);
+    if (!await _prefs.setString(_lyricsCacheKey, jsonEncode(cache))) {
+      throw StateError('Could not update saved lyrics');
     }
-  }
+    onChanged?.call();
+  });
 
-  /// Search through cached lyrics (now includes track/artist names)
   List<LyricsModel> searchCachedLyrics(String query) {
-    final allLyrics = getAllCachedLyrics();
-    final lowerQuery = query.toLowerCase();
-    return allLyrics.where((lyrics) {
-      return lyrics.plainLyrics.toLowerCase().contains(lowerQuery) ||
-          lyrics.songId.toLowerCase().contains(lowerQuery) ||
-          (lyrics.trackName?.toLowerCase().contains(lowerQuery) ?? false) ||
-          (lyrics.artistName?.toLowerCase().contains(lowerQuery) ?? false) ||
-          (lyrics.albumName?.toLowerCase().contains(lowerQuery) ?? false);
-    }).toList();
+    final lower = query.toLowerCase();
+    return getAllCachedLyrics()
+        .where(
+          (lyrics) =>
+              lyrics.plainLyrics.toLowerCase().contains(lower) ||
+              lyrics.songId.toLowerCase().contains(lower) ||
+              (lyrics.trackName?.toLowerCase().contains(lower) ?? false) ||
+              (lyrics.artistName?.toLowerCase().contains(lower) ?? false) ||
+              (lyrics.albumName?.toLowerCase().contains(lower) ?? false),
+        )
+        .toList();
   }
 
-  /// Clear all cache (public)
-  Future<void> clearAllCache() async {
-    await _prefs.remove(_lyricsCacheKey);
-  }
+  Future<void> clearAllCache() => _write(() async {
+    if (!await _prefs.remove(_lyricsCacheKey))
+      throw StateError('Could not clear saved lyrics');
+    onChanged?.call();
+  });
 
-  /// Clear all cache (internal wrapper)
-  Future<void> _clearCache() async {
-    await clearAllCache();
-  }
-
-  /// Delete by songId (alias for deleteCachedLyrics)
-  Future<void> deleteBySongId(String songId) async {
-    await deleteCachedLyrics(songId);
-  }
-
-  /// Get cache entry count
-  int getCacheCount() {
-    final cachedData = _prefs.getString(_lyricsCacheKey);
-    if (cachedData == null) return 0;
-    try {
-      final Map<String, dynamic> cache = jsonDecode(cachedData);
-      return cache.length;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  /// Get cache size in bytes
-  int getCacheSize() {
-    final cachedData = _prefs.getString(_lyricsCacheKey);
-    if (cachedData == null) return 0;
-    return cachedData.length;
-  }
-
-  /// Get cache size formatted
+  Future<void> deleteBySongId(String songId) => deleteCachedLyrics(songId);
+  int getCacheCount() => getAllCachedLyrics().length;
+  int getCacheSize() =>
+      utf8.encode(_prefs.getString(_lyricsCacheKey) ?? '').length;
   String getCacheSizeFormatted() {
     final bytes = getCacheSize();
     if (bytes < 1024) return '$bytes B';

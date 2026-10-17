@@ -45,22 +45,12 @@ class FloatTrampolineActivity : Activity() {
             return
         }
 
-        val title = intent.getStringExtra("title") ?: OverlayLyricsCache.title
-        val artist = intent.getStringExtra("artist") ?: OverlayLyricsCache.artist
-        val lrc = intent.getStringExtra("lrcLyrics") ?: OverlayLyricsCache.lrc
-        val plain = intent.getStringExtra("lyrics") ?: OverlayLyricsCache.plain
-        val offset = intent.getIntExtra("syncOffsetMs", OverlayLyricsCache.syncOffsetMs)
-        val seek = intent.getBooleanExtra("enableSeek", OverlayLyricsCache.seekEnabled)
-
-        val overlayIntent = Intent(this, LyricsOverlayService::class.java).apply {
-            action = LyricsOverlayService.ACTION_SHOW
-            putExtra("title", title)
-            putExtra("artist", artist)
-            putExtra("lrcLyrics", lrc)
-            putExtra("lyrics", plain)
-            putExtra("currentLine", "")
-            putExtra("syncOffsetMs", offset)
-            putExtra("enableSeek", seek)
+        val overlayIntent = NativeOverlayIntent.forCurrentSong(this)
+        if (overlayIntent == null) {
+            MusicNotificationManager.cancelMusicNotification(this)
+            android.widget.Toast.makeText(this, "No active music found. Start playback and try again.", android.widget.Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
 
         try {
@@ -69,7 +59,7 @@ class FloatTrampolineActivity : Activity() {
             } else {
                 startService(overlayIntent)
             }
-            Log.d(TAG, "Overlay service started for $title by $artist")
+            Log.d(TAG, "Overlay service started for current playback")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start overlay service", e)
         }

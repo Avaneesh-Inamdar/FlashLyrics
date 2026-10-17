@@ -2,22 +2,17 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'providers.dart';
+import '../../core/utils/song_key.dart' as identity;
 
 /// Standardized helper to generate a consistent key for a song across the app.
 String generateSongKey({String? songId, String? artist, String? title}) {
-  if (artist != null && title != null && (artist.trim().isNotEmpty || title.trim().isNotEmpty)) {
-    return '${artist.trim().toLowerCase()}_${title.trim().toLowerCase()}'
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .replaceAll(RegExp(r'^_|_$'), '');
+  if (artist != null &&
+      title != null &&
+      (artist.trim().isNotEmpty || title.trim().isNotEmpty)) {
+    return identity.songKey(artist, title);
   }
   if (songId != null && songId.trim().isNotEmpty) {
-    return songId
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .replaceAll(RegExp(r'^_|_$'), '');
+    return identity.songKey('', songId);
   }
   return '';
 }
@@ -85,6 +80,6 @@ class SongOffsetNotifier extends StateNotifier<Map<String, int>> {
 /// Provider for per-song lyrics sync offsets
 final songOffsetProvider =
     StateNotifierProvider<SongOffsetNotifier, Map<String, int>>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return SongOffsetNotifier(prefs);
-});
+      final prefs = ref.watch(sharedPreferencesProvider);
+      return SongOffsetNotifier(prefs);
+    });

@@ -86,7 +86,7 @@
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:taskAffinity=""
-            android:exported="true" />
+            android:exported="false" />
 
         <!-- Notification action receivers -->
         <receiver

@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/lyrics_image_generator.dart';
 import '../../domain/entities/lyrics.dart';
+import '../../data/models/lyrics_model.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
@@ -38,11 +39,13 @@ class LyricsDisplay extends ConsumerStatefulWidget {
 class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   double _syncedFontSize = 22.0; // Default size for synced lyrics
   bool _showSizeSlider = false;
+  bool get _estimateWordTiming => ref.read(settingsProvider).karaokeEnabled;
   bool _isShareSelectionMode = false;
   int? _selectedStart;
   int? _selectedEnd;
   final ScrollController _plainLyricsScrollController = ScrollController();
-  int? _currentLineIndexForScroll; // Target plain line to scroll to when entering share mode
+  int?
+  _currentLineIndexForScroll; // Target plain line to scroll to when entering share mode
   // Keys for each plain lyric line to enable precise scroll to current playback position
   List<GlobalKey> _lineKeys = [];
 
@@ -297,8 +300,33 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
+                  if (hasSyncedLyrics &&
+                      showSyncedLyrics &&
+                      widget.lyrics.lrcLyrics?.contains(
+                            RegExp(r'<\d{1,3}:\d{2}'),
+                          ) !=
+                          true)
+                    _buildActionButton(
+                      icon: Icons.auto_awesome_rounded,
+                      label: 'Karaoke',
+                      isActive: _estimateWordTiming,
+                      onTap: () {
+                        ref
+                            .read(settingsProvider.notifier)
+                            .setKaraokeEnabled(!_estimateWordTiming);
+                        if (_estimateWordTiming)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Word timing is estimated from each lyric line.',
+                              ),
+                            ),
+                          );
+                      },
+                    ),
                   // Show cancel button when in share mode (plain lyrics view with synced available)
-                  if (_isShareSelectionMode || (hasSyncedLyrics && !showSyncedLyrics))
+                  if (_isShareSelectionMode ||
+                      (hasSyncedLyrics && !showSyncedLyrics))
                     _buildActionButton(
                       icon: Icons.close_rounded,
                       label: 'Cancel',
@@ -353,13 +381,19 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         children: [
           Icon(Icons.sync_rounded, size: 14, color: AppTheme.successColor),
           const SizedBox(width: 6),
-          Text(
-            widget.lyrics.lrcLyrics?.contains(RegExp(r'<\d{1,3}:\d{2}')) == true
-                ? 'Word by word' : 'Line by line',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.successColor,
+          Flexible(
+            child: Text(
+              widget.lyrics.lrcLyrics?.contains(RegExp(r'<\d{1,3}:\d{2}')) ==
+                      true
+                  ? 'Word by word'
+                  : _estimateWordTiming
+                  ? 'Karaoke · estimated timing'
+                  : 'Line by line',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.successColor,
+              ),
             ),
           ),
         ],
@@ -537,7 +571,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
               _hasSelection &&
               index >= _selectedStart! &&
               index <= _selectedEnd!;
-          final isTargetLine = _currentLineIndexForScroll != null && index == _currentLineIndexForScroll;
+          final isTargetLine =
+              _currentLineIndexForScroll != null &&
+              index == _currentLineIndexForScroll;
 
           if (isEmpty) {
             return SizedBox(key: _lineKeys[index], height: 14);
@@ -551,19 +587,26 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.symmetric(vertical: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppTheme.primaryColor.withValues(alpha: 0.15)
                       : isTargetLine
-                          ? AppTheme.successColor.withValues(alpha: 0.10)
-                          : Colors.transparent,
+                      ? AppTheme.successColor.withValues(alpha: 0.10)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   border: isSelected
-                      ? Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.35))
+                      ? Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                        )
                       : isTargetLine
-                          ? Border.all(color: AppTheme.successColor.withValues(alpha: 0.25))
-                          : null,
+                      ? Border.all(
+                          color: AppTheme.successColor.withValues(alpha: 0.25),
+                        )
+                      : null,
                 ),
                 child: Column(
                   children: [
@@ -573,9 +616,23 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Container(width: 6, height: 6, decoration: BoxDecoration(color: AppTheme.successColor, shape: BoxShape.circle)),
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: AppTheme.successColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
                             const SizedBox(width: 6),
-                            Text('Now playing • ${_formatDuration(widget.currentPosition)}', style: TextStyle(fontSize: 11, color: AppTheme.successColor, fontWeight: FontWeight.w600)),
+                            Text(
+                              'Now playing • ${_formatDuration(widget.currentPosition)}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.successColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -584,7 +641,9 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
                       style: TextStyle(
                         fontSize: 18,
                         height: 1.7,
-                        fontWeight: isTargetLine ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isTargetLine
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: textColor,
                         letterSpacing: 0.3,
                       ),
@@ -609,7 +668,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
 
   Widget _buildFloatingShareButton(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Positioned(
       bottom: 80,
       right: 20,
@@ -625,11 +684,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.share_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
+                const Icon(Icons.share_rounded, color: Colors.white, size: 24),
                 const SizedBox(width: 8),
                 Text(
                   'Share (${_selectedCount.toString()})',
@@ -656,8 +711,12 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     final currentSong = ref.watch(lyricsNotifierProvider).currentSong;
     final songKey = generateSongKey(
       songId: widget.lyrics.songId,
-      artist: currentSong?.artist,
-      title: currentSong?.title,
+      artist: widget.lyrics is LyricsModel
+          ? (widget.lyrics as LyricsModel).artistName
+          : currentSong?.artist,
+      title: widget.lyrics is LyricsModel
+          ? (widget.lyrics as LyricsModel).trackName
+          : currentSong?.title,
     );
     final effectiveOffset = songOffsets[songKey] ?? settings.lyricsSyncOffset;
 
@@ -678,6 +737,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       ),
       clipBehavior: Clip.antiAlias,
       child: SyncedLyricsDisplay(
+        estimateWordTiming: _estimateWordTiming,
         lrcContent: widget.lyrics.lrcLyrics!,
         currentPosition: widget.currentPosition ?? Duration.zero,
         isPlaying: widget.isPlaying,
@@ -687,8 +747,12 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         onOffsetChanged: (newOffset) {
           final sKey = generateSongKey(
             songId: widget.lyrics.songId,
-            artist: currentSong?.artist,
-            title: currentSong?.title,
+            artist: widget.lyrics is LyricsModel
+                ? (widget.lyrics as LyricsModel).artistName
+                : currentSong?.artist,
+            title: widget.lyrics is LyricsModel
+                ? (widget.lyrics as LyricsModel).trackName
+                : currentSong?.title,
           );
           ref.read(songOffsetProvider.notifier).setSongOffset(sKey, newOffset);
         },
@@ -896,7 +960,10 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     }
   }
 
-  Future<void> _handleShareTap(BuildContext context, bool showSyncedLyrics) async {
+  Future<void> _handleShareTap(
+    BuildContext context,
+    bool showSyncedLyrics,
+  ) async {
     if (_hasSelection) {
       await _shareToClipboard(context);
       return;
@@ -912,32 +979,40 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       _scrollToCurrentLine();
     }
 
-    final pos = widget.currentPosition ?? ref.read(mediaNotifierProvider).currentPosition;
+    final pos =
+        widget.currentPosition ??
+        ref.read(mediaNotifierProvider).currentPosition;
     final posLabel = _formatDuration(pos);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_currentLineIndexForScroll != null
-              ? 'Scrolled to $posLabel — tap lines to select, share button to create image'
-              : 'Tap lines to select, long-press to share single line'),
+          content: Text(
+            _currentLineIndexForScroll != null
+                ? 'Scrolled to $posLabel — tap lines to select, share button to create image'
+                : 'Tap lines to select, long-press to share single line',
+          ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: AppTheme.surfaceLight,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
     }
   }
-  
+
   Future<void> _calculateCurrentLineIndex() async {
     final lrc = widget.lyrics.lrcLyrics;
-    final pos = widget.currentPosition ?? ref.read(mediaNotifierProvider).currentPosition;
+    final pos =
+        widget.currentPosition ??
+        ref.read(mediaNotifierProvider).currentPosition;
     if (lrc == null || pos == Duration.zero) return;
-    
+
     try {
       final parsedLrc = await LrcParser.parse(lrc);
       if (!mounted) return;
-      
+
       // Replicate synced display's lead time (800ms + user offset) to find the
       // same line the user currently sees highlighted at playback position
       final settings = ref.read(settingsProvider);
@@ -949,7 +1024,8 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       );
       final effectiveOffset =
           ref.read(songOffsetProvider)[songKey] ?? settings.lyricsSyncOffset;
-      final lead = const Duration(milliseconds: 800) +
+      final lead =
+          const Duration(milliseconds: 800) +
           Duration(milliseconds: effectiveOffset);
       final adjusted = pos + lead;
       final currentIndex = parsedLrc.getLineIndexAtTime(adjusted);
@@ -964,20 +1040,34 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         plainIndex = plainLines.indexWhere((l) => l.trim() == currentText);
         // 2. Case-insensitive exact match
         if (plainIndex == -1) {
-          plainIndex = plainLines.indexWhere((l) => l.trim().toLowerCase() == currentText.toLowerCase());
+          plainIndex = plainLines.indexWhere(
+            (l) => l.trim().toLowerCase() == currentText.toLowerCase(),
+          );
         }
         // 3. Substring match
         if (plainIndex == -1) {
           final lower = currentText.toLowerCase();
-          plainIndex = plainLines.indexWhere((l) => l.trim().toLowerCase().contains(lower) || lower.contains(l.trim().toLowerCase()));
+          plainIndex = plainLines.indexWhere(
+            (l) =>
+                l.trim().toLowerCase().contains(lower) ||
+                lower.contains(l.trim().toLowerCase()),
+          );
         }
         // 4. Normalized match (ignoring punctuation)
         if (plainIndex == -1) {
-          final normCurrent = currentText.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
+          final normCurrent = currentText
+              .toLowerCase()
+              .replaceAll(RegExp(r'[^\w\s]'), '')
+              .trim();
           if (normCurrent.isNotEmpty) {
             plainIndex = plainLines.indexWhere((l) {
-              final normL = l.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
-              return normL == normCurrent || normL.contains(normCurrent) || normCurrent.contains(normL);
+              final normL = l
+                  .toLowerCase()
+                  .replaceAll(RegExp(r'[^\w\s]'), '')
+                  .trim();
+              return normL == normCurrent ||
+                  normL.contains(normCurrent) ||
+                  normCurrent.contains(normL);
             });
           }
         }
@@ -985,11 +1075,18 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
 
       // Fallback: proportional mapping if text not found (e.g., plain vs lrc mismatch)
       if (plainIndex == -1) {
-        final ratio = parsedLrc.lines.isEmpty ? 0.0 : currentIndex / parsedLrc.lines.length;
-        plainIndex = (ratio * plainLines.length).round().clamp(0, plainLines.length - 1);
+        final ratio = parsedLrc.lines.isEmpty
+            ? 0.0
+            : currentIndex / parsedLrc.lines.length;
+        plainIndex = (ratio * plainLines.length).round().clamp(
+          0,
+          plainLines.length - 1,
+        );
         // Skip empty lines near target
         int offset = 0;
-        while (plainIndex + offset < plainLines.length && plainLines[plainIndex + offset].trim().isEmpty) offset++;
+        while (plainIndex + offset < plainLines.length &&
+            plainLines[plainIndex + offset].trim().isEmpty)
+          offset++;
         if (plainIndex + offset < plainLines.length) plainIndex += offset;
       }
 
@@ -1005,13 +1102,13 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
       // Ignore parsing errors
     }
   }
-  
+
   void _scrollToCurrentLine() {
     if (_currentLineIndexForScroll == null) return;
     final target = _currentLineIndexForScroll!;
     _ensureLineKeys(_plainLyricsLines().length);
     if (target >= _lineKeys.length) return;
-    
+
     // Wait for plain ListView to be mounted, then use ensureVisible for pixel-perfect scroll
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1026,7 +1123,8 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
               ctx,
               duration: const Duration(milliseconds: 450),
               curve: Curves.easeOutCubic,
-              alignment: 0.35, // Show target near top third, with context above/below
+              alignment:
+                  0.35, // Show target near top third, with context above/below
             );
             return;
           } catch (_) {
@@ -1037,8 +1135,15 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
         if (!_plainLyricsScrollController.hasClients) return;
         // Estimate 48px per line (padding + text)
         const est = 48.0;
-        final offset = (target * est - 100).clamp(0.0, _plainLyricsScrollController.position.maxScrollExtent);
-        _plainLyricsScrollController.animateTo(offset, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
+        final offset = (target * est - 100).clamp(
+          0.0,
+          _plainLyricsScrollController.position.maxScrollExtent,
+        );
+        _plainLyricsScrollController.animateTo(
+          offset,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+        );
       });
     });
   }

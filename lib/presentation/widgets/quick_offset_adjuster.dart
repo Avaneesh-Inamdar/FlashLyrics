@@ -37,6 +37,14 @@ class _QuickOffsetAdjusterState extends State<QuickOffsetAdjuster> {
     widget.onOffsetChanged(_offset);
   }
 
+  @override
+  void didUpdateWidget(covariant QuickOffsetAdjuster oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentOffset != widget.currentOffset) {
+      _offset = widget.currentOffset;
+    }
+  }
+
   String _formatOffset(int ms) {
     if (ms == 0) return '0 ms (default)';
     final sign = ms > 0 ? '+' : '';
@@ -47,9 +55,15 @@ class _QuickOffsetAdjusterState extends State<QuickOffsetAdjuster> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurface;
-    final surfaceLight = isDark ? AppTheme.surfaceLight : AppTheme.lightSurfaceLight;
-    final textPrimary = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
-    final textSecondary = isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+    final surfaceLight = isDark
+        ? AppTheme.surfaceLight
+        : AppTheme.lightSurfaceLight;
+    final textPrimary = isDark
+        ? AppTheme.textPrimary
+        : AppTheme.lightTextPrimary;
+    final textSecondary = isDark
+        ? AppTheme.textSecondary
+        : AppTheme.lightTextSecondary;
 
     return Positioned.fill(
       child: GestureDetector(
@@ -69,7 +83,9 @@ class _QuickOffsetAdjusterState extends State<QuickOffsetAdjuster> {
                     decoration: BoxDecoration(
                       color: surface.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -82,29 +98,62 @@ class _QuickOffsetAdjusterState extends State<QuickOffsetAdjuster> {
                                 gradient: AppTheme.primaryGradient,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.tune_rounded, color: Colors.white, size: 18),
+                              child: const Icon(
+                                Icons.tune_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Sync Offset', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
-                                  Text('Adjust if lyrics are early/late', style: TextStyle(fontSize: 12, color: textSecondary)),
+                                  Text(
+                                    'Sync Offset',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Adjust if lyrics are early/late',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: textSecondary,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                            IconButton(icon: Icon(Icons.close_rounded, color: textSecondary), onPressed: widget.onClose),
+                            IconButton(
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: textSecondary,
+                              ),
+                              onPressed: widget.onClose,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
-                        Text(_formatOffset(_offset), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppTheme.primaryLight)),
+                        Text(
+                          _formatOffset(_offset),
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryLight,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             IconButton(
                               onPressed: () => setState(() => _offset -= 100),
-                              icon: Icon(Icons.remove_circle_outline, color: textSecondary),
+                              icon: Icon(
+                                Icons.remove_circle_outline,
+                                color: textSecondary,
+                              ),
                             ),
                             Expanded(
                               child: SliderTheme(
@@ -113,7 +162,9 @@ class _QuickOffsetAdjusterState extends State<QuickOffsetAdjuster> {
                                   inactiveTrackColor: surfaceLight,
                                   thumbColor: AppTheme.primaryLight,
                                   trackHeight: 4,
-                                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                  thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 8,
+                                  ),
                                 ),
                                 child: Slider(
                                   value: _offset.clamp(-2000, 2000).toDouble(),
@@ -121,13 +172,17 @@ class _QuickOffsetAdjusterState extends State<QuickOffsetAdjuster> {
                                   max: 2000,
                                   divisions: 40,
                                   label: _formatOffset(_offset),
-                                  onChanged: (v) => setState(() => _offset = v.round()),
+                                  onChanged: (v) =>
+                                      setState(() => _offset = v.round()),
                                 ),
                               ),
                             ),
                             IconButton(
                               onPressed: () => setState(() => _offset += 100),
-                              icon: Icon(Icons.add_circle_outline, color: textSecondary),
+                              icon: Icon(
+                                Icons.add_circle_outline,
+                                color: textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -147,8 +202,13 @@ class _QuickOffsetAdjusterState extends State<QuickOffsetAdjuster> {
                               flex: 2,
                               child: ElevatedButton(
                                 onPressed: _apply,
-                                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
-                                child: const Text('Apply', style: TextStyle(color: Colors.white)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryColor,
+                                ),
+                                child: const Text(
+                                  'Apply',
+                                  style: TextStyle(color: Colors.white),
+                                ),
                               ),
                             ),
                           ],

@@ -16,6 +16,8 @@ class RecoveryRemote extends LyricsRemoteDataSource {
   int calls = 0;
   int failures = 1;
   @override
+  Future<LyricsModel?> findWordSyncedLyrics(String artist, String title) async => null;
+  @override
   Future<LyricsModel?> fetchAllParallel(String artist, String title,
       {List<String>? providerPriority}) async {
     calls++;

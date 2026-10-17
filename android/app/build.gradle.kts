@@ -63,6 +63,8 @@ android {
         abortOnError = false
         checkReleaseBuilds = false
     }
+
+    testOptions { unitTests.isIncludeAndroidResources = true }
     
     packaging {
         jniLibs {
@@ -72,6 +74,8 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
     implementation("androidx.activity:activity-ktx:1.12.4")
     implementation("com.google.android.play:app-update:2.1.0")
 }
