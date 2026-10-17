@@ -69,7 +69,7 @@ Spotify, YouTube Music, Apple Music and other Android players can work when they
 
 ## What’s new
 
-The current source is **1.4.3 · Android version code 15**. Published downloads are listed on the release page; Google Play availability follows its release rollout.
+The current source is **1.4.3**. Published downloads are listed on the release page; Google Play availability follows its release rollout.
 
 - Animated word highlighting with optional background timing upgrades.
 - Saved karaoke preference across songs and app restarts.
