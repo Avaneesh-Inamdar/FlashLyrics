@@ -46,6 +46,7 @@ FlashLyrics reads the track information shared by your music player and finds th
 | Synced lyrics | Automatic line scrolling, tap-to-seek, and timing adjustments. |
 | Floating window | Lyrics above your music player, with resizing and optional seeking. |
 | Offline library | Previously fetched lyrics saved on your device. |
+| Your own lyrics | Import a `.lrc` or `.txt` file, or paste lyrics and timestamps for a particular song. Saved locally for offline use. |
 | Manual search | Search by song or artist, choose a result, and explore Genius for harder-to-find tracks. |
 | Sharing | Share selected lyrics as text or a styled image. |
 | Personalization | Light, dark or system theme; accent colors; adjustable text size. |
@@ -85,7 +86,7 @@ Results depend on provider availability and matching metadata. Lyrics belong to 
 
 **Notification Access** enables music detection. **Display over other apps** enables the floating window. Android notification permission allows the app’s playback notification where required.
 
-Fetched lyrics and preferences are stored locally. Online lyric lookup sends song or search information to the selected providers. Banner advertising is optional and can be disabled in Settings.
+Fetched lyrics, imported text and preferences are stored locally. Imports are not uploaded to lyric providers. Online lyric lookup sends song or search information to the selected providers. Banner advertising is optional and can be disabled in Settings.
 
 ## Build from source
 

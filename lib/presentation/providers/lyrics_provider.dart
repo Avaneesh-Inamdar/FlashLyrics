@@ -141,7 +141,11 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
             if (kDebugMode)
               debugPrint('✅ Using cached lyrics for ${song.title}');
             if (requestId != _latestSongRequestId) return;
-            state = state.copyWith(lyrics: cached, isLoading: false);
+            state = state.copyWith(
+              currentSong: _withArtwork(song, cached),
+              lyrics: cached,
+              isLoading: false,
+            );
             unawaited(_upgradeWords(song, cached, requestId));
             return;
           }
@@ -171,7 +175,11 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       // Media callbacks overlap during skips.  An older response must never
       // overwrite lyrics for the song that is now playing.
       if (requestId != _latestSongRequestId) return;
-      state = state.copyWith(lyrics: lyrics, isLoading: false);
+      state = state.copyWith(
+        currentSong: _withArtwork(song, lyrics),
+        lyrics: lyrics,
+        isLoading: false,
+      );
       unawaited(_upgradeWords(song, lyrics, requestId));
     } catch (e) {
       if (requestId != _latestSongRequestId) return;
@@ -223,6 +231,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
             title: title,
             artist: artist,
             album: null,
+            artworkUrl: lyrics is LyricsModel ? lyrics.artworkUrl : null,
           ),
         );
         unawaited(
@@ -256,7 +265,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
   }
 
   /// Set lyrics directly from a LyricsModel (from search results)
-  void setLyricsFromModel(LyricsModel model) {
+  void setLyricsFromModel(LyricsModel model, {bool cache = true}) {
     ++_latestSongRequestId;
     ++_latestSearchId;
     // Create a song from the search result metadata
@@ -265,6 +274,16 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       title: model.trackName ?? 'Unknown Song',
       artist: model.artistName ?? 'Unknown Artist',
       album: model.albumName,
+      artworkUrl:
+          model.artworkUrl ??
+          (state.currentSong != null &&
+                  songKey(
+                        state.currentSong!.artist,
+                        state.currentSong!.title,
+                      ) ==
+                      model.songId
+              ? state.currentSong!.artworkUrl
+              : null),
       source: 'Search',
     );
 
@@ -276,7 +295,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       isLoading: false,
       error: null,
     );
-    unawaited(_saveSelectedLyrics(model));
+    if (cache) unawaited(_saveSelectedLyrics(model));
     unawaited(_upgradeWords(song, lyrics, _latestSongRequestId));
   }
 
@@ -289,7 +308,8 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
   }
 
   Future<void> _upgradeWords(Song song, Lyrics original, int requestId) async {
-    if (_findWordLyrics == null ||
+    if ((original is LyricsModel && original.isUserProvided) ||
+        _findWordLyrics == null ||
         !_providerPriority.contains('lrclib') ||
         original.lrcLyrics?.contains(RegExp(r'<\d{1,3}:\d{2}')) == true)
       return;
@@ -313,6 +333,11 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
       // Enrichment is optional and never clears the first lyrics result.
     }
   }
+
+  Song _withArtwork(Song song, Lyrics lyrics) =>
+      lyrics is LyricsModel && (song.artworkUrl?.isEmpty ?? true)
+      ? song.copyWith(artworkUrl: lyrics.artworkUrl)
+      : song;
 
   /// Clear lyrics
   void clear() {

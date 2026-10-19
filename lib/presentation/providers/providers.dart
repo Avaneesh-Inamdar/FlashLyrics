@@ -29,7 +29,7 @@ final dioClientProvider = Provider<Dio>((ref) {
       receiveTimeout: const Duration(seconds: 15),
       headers: {
         'User-Agent':
-            'FlashLyrics/1.4.3 (https://github.com/Avaneesh-Inamdar/FlashLyrics)',
+            'FlashLyrics/1.4.4 (https://github.com/Avaneesh-Inamdar/FlashLyrics)',
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
         'Accept-Encoding': 'gzip, deflate',

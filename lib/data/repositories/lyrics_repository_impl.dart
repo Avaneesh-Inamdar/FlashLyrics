@@ -33,7 +33,8 @@ class LyricsRepositoryImpl implements LyricsRepository {
 
     // Check cache only if it matches the exact song
     final cachedLyrics = _findCached(artist: song.artist, title: song.title);
-    if (!forceRefresh && cachedLyrics != null) {
+    if (cachedLyrics != null &&
+        (!forceRefresh || cachedLyrics.isUserProvided)) {
       // Return cached synced lyrics immediately
       if (cachedLyrics.isSynced) return cachedLyrics;
       // Return cached unsynced, but don't block - upgrade can happen next time
@@ -49,11 +50,20 @@ class LyricsRepositoryImpl implements LyricsRepository {
 
     lyrics ??= await _geniusDataSource?.findExact(song.artist, song.title);
 
+    // An import can finish while providers are still in flight. Keep the user's
+    // choice in both the returned result and persistent cache.
+    final imported = _findCached(artist: song.artist, title: song.title);
+    if (imported?.isUserProvided == true) return imported!;
+
     if (lyrics != null &&
         (lyrics.plainLyrics.trim().isNotEmpty ||
             (lyrics.lrcLyrics?.trim().isNotEmpty ?? false))) {
-      await _localDataSource.cacheLyrics(lyrics);
-      return lyrics;
+      if ((lyrics.artworkUrl?.isEmpty ?? true) && song.artworkUrl != null) {
+        lyrics = lyrics.copyWith(artworkUrl: song.artworkUrl);
+      }
+      await _localDataSource.cacheLyrics(lyrics, preserveUserProvided: true);
+      final saved = _findCached(artist: song.artist, title: song.title);
+      return saved?.isUserProvided == true ? saved! : lyrics;
     }
 
     throw LyricsNotFoundException(
@@ -82,11 +92,15 @@ class LyricsRepositoryImpl implements LyricsRepository {
 
     lyrics ??= await _geniusDataSource?.findExact(artist, title);
 
+    final imported = _findCached(artist: artist, title: title);
+    if (imported?.isUserProvided == true) return imported!;
+
     if (lyrics != null &&
         (lyrics.plainLyrics.trim().isNotEmpty ||
             (lyrics.lrcLyrics?.trim().isNotEmpty ?? false))) {
-      await _localDataSource.cacheLyrics(lyrics);
-      return lyrics;
+      await _localDataSource.cacheLyrics(lyrics, preserveUserProvided: true);
+      final saved = _findCached(artist: artist, title: title);
+      return saved?.isUserProvided == true ? saved! : lyrics;
     }
 
     throw LyricsNotFoundException(
@@ -107,6 +121,15 @@ class LyricsRepositoryImpl implements LyricsRepository {
   @override
   Future<void> cacheLyrics(Lyrics lyrics) async {
     if (lyrics is LyricsModel) {
+      final existing = _localDataSource.getCachedLyrics(lyrics.songId);
+      if ((lyrics.artworkUrl?.isEmpty ?? true) &&
+          existing?.artworkUrl != null &&
+          existing?.artistName != null &&
+          existing?.trackName != null &&
+          songKey(existing!.artistName!, existing.trackName!) ==
+              lyrics.songId) {
+        lyrics = lyrics.copyWith(artworkUrl: existing.artworkUrl);
+      }
       await _localDataSource.cacheLyrics(lyrics);
       return;
     }

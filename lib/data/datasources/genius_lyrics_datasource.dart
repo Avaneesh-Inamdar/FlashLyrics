@@ -10,10 +10,23 @@ class GeniusSong {
     required this.title,
     required this.artist,
     required this.url,
+    this.artworkUrl,
   });
   final String title;
   final String artist;
   final Uri url;
+  final String? artworkUrl;
+
+  static String? validArtwork(dynamic value) {
+    if (value is! String) return null;
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+            uri.scheme == 'https' &&
+            uri.host.isNotEmpty &&
+            uri.userInfo.isEmpty
+        ? uri.toString()
+        : null;
+  }
 }
 
 /// Best-effort access to Genius's public website, not its authenticated API.
@@ -41,7 +54,7 @@ class GeniusLyricsDataSource {
     receiveTimeout: const Duration(seconds: 8),
     validateStatus: (_) => true,
     headers: {
-      'User-Agent': 'FlashLyrics/1.4.2',
+      'User-Agent': 'FlashLyrics/1.4.4',
       'Accept': 'application/json, text/html',
     },
   );
@@ -106,7 +119,14 @@ class GeniusLyricsDataSource {
           final uri = validateSongUrl(url);
           if (seen.add(uri.toString())) {
             songs.add(
-              GeniusSong(title: title.trim(), artist: artist.trim(), url: uri),
+              GeniusSong(
+                title: title.trim(),
+                artist: artist.trim(),
+                url: uri,
+                artworkUrl:
+                    GeniusSong.validArtwork(result['song_art_image_url']) ??
+                    GeniusSong.validArtwork(result['header_image_url']),
+              ),
             );
           }
         } on FormatException {
@@ -190,6 +210,13 @@ class GeniusLyricsDataSource {
       isSynced: false,
       source: 'Genius',
       sourceUrl: uri.toString(),
+      artworkUrl:
+          song.artworkUrl ??
+          GeniusSong.validArtwork(
+            document
+                .querySelector('meta[property="og:image"]')
+                ?.attributes['content'],
+          ),
       fetchedAt: DateTime.now(),
       artistName: song.artist,
       trackName: song.title,
@@ -232,6 +259,7 @@ class GeniusLyricsDataSource {
           isSynced: false,
           source: result.source,
           sourceUrl: result.sourceUrl,
+          artworkUrl: result.artworkUrl,
           fetchedAt: result.fetchedAt,
           artistName: result.artistName,
           trackName: result.trackName,

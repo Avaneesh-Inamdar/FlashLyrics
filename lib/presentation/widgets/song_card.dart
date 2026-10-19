@@ -17,6 +17,7 @@ class SongCard extends StatefulWidget {
 
 class _SongCardState extends State<SongCard> {
   String? _resolvedArtworkUrl;
+  int _artworkRequest = 0;
 
   @override
   void initState() {
@@ -34,20 +35,23 @@ class _SongCardState extends State<SongCard> {
   }
 
   Future<void> _resolveArtwork() async {
+    final request = ++_artworkRequest;
+    final song = widget.song;
+    _resolvedArtworkUrl = null;
     final normalized = _normalizeArtworkUrl(widget.song.artworkUrl);
     // If normalized is a file:// URL, verify file exists; otherwise fallback to iTunes
     if (normalized != null) {
       if (normalized.startsWith('file://')) {
         final filePath = _filePathFromUrl(normalized);
         if (filePath != null && await File(filePath).exists()) {
-          if (!mounted) return;
+          if (!mounted || request != _artworkRequest) return;
           setState(() => _resolvedArtworkUrl = normalized);
           return;
         }
         // File doesn't exist (stale cache) -> fall through to network fallback
       } else if (!normalized.startsWith('content://')) {
         // Valid http/https url
-        if (!mounted) return;
+        if (!mounted || request != _artworkRequest) return;
         setState(() => _resolvedArtworkUrl = normalized);
         return;
       }
@@ -55,10 +59,10 @@ class _SongCardState extends State<SongCard> {
     }
 
     final fetched = await _fetchArtworkFromItunes(
-      widget.song.artist,
-      widget.song.title,
+      song.artist,
+      song.title,
     );
-    if (!mounted) return;
+    if (!mounted || request != _artworkRequest) return;
     if (fetched != null) {
       setState(() => _resolvedArtworkUrl = fetched);
     } else if (normalized != null && !normalized.startsWith('content://')) {

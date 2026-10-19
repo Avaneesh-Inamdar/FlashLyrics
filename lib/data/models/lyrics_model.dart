@@ -7,9 +7,10 @@ class LyricsModel extends Lyrics {
   final String? trackName;
   final String? albumName;
   final String? sourceUrl;
+  final String? artworkUrl;
+  final bool isUserProvided;
 
-  /// True only when automatic lookup verified provider metadata against the
-  /// currently playing artist and title.
+  /// Verified by an automatic metadata match or an explicit local import.
   final bool isMatchVerified;
 
   const LyricsModel({
@@ -24,6 +25,8 @@ class LyricsModel extends Lyrics {
     this.trackName,
     this.albumName,
     this.sourceUrl,
+    this.artworkUrl,
+    this.isUserProvided = false,
     this.isMatchVerified = false,
   });
 
@@ -43,6 +46,8 @@ class LyricsModel extends Lyrics {
       trackName: json['trackName'] as String?,
       albumName: json['albumName'] as String?,
       sourceUrl: json['sourceUrl'] as String?,
+      artworkUrl: json['artworkUrl'] as String?,
+      isUserProvided: json['isUserProvided'] as bool? ?? false,
       isMatchVerified: json['isMatchVerified'] as bool? ?? false,
     );
   }
@@ -61,9 +66,44 @@ class LyricsModel extends Lyrics {
       'trackName': trackName,
       'albumName': albumName,
       'sourceUrl': sourceUrl,
+      'artworkUrl': artworkUrl,
+      'isUserProvided': isUserProvided,
       'isMatchVerified': isMatchVerified,
     };
   }
+
+  @override
+  LyricsModel copyWith({
+    String? id,
+    String? songId,
+    String? plainLyrics,
+    String? lrcLyrics,
+    bool? isSynced,
+    String? source,
+    DateTime? fetchedAt,
+    String? artistName,
+    String? trackName,
+    String? albumName,
+    String? sourceUrl,
+    String? artworkUrl,
+    bool? isMatchVerified,
+    bool? isUserProvided,
+  }) => LyricsModel(
+    id: id ?? this.id,
+    songId: songId ?? this.songId,
+    plainLyrics: plainLyrics ?? this.plainLyrics,
+    lrcLyrics: lrcLyrics ?? this.lrcLyrics,
+    isSynced: isSynced ?? this.isSynced,
+    source: source ?? this.source,
+    fetchedAt: fetchedAt ?? this.fetchedAt,
+    artistName: artistName ?? this.artistName,
+    trackName: trackName ?? this.trackName,
+    albumName: albumName ?? this.albumName,
+    sourceUrl: sourceUrl ?? this.sourceUrl,
+    artworkUrl: artworkUrl ?? this.artworkUrl,
+    isMatchVerified: isMatchVerified ?? this.isMatchVerified,
+    isUserProvided: isUserProvided ?? this.isUserProvided,
+  );
 
   /// Create from domain entity
   factory LyricsModel.fromEntity(Lyrics lyrics) {

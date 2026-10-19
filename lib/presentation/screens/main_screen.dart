@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
@@ -9,6 +10,8 @@ import 'search_screen.dart';
 
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/notification_tip.dart';
+import '../widgets/review_prompt.dart';
+import '../../services/review_service.dart';
 
 /// Main navigation screen with custom bottom navigation bar
 class MainScreen extends ConsumerStatefulWidget {
@@ -19,11 +22,26 @@ class MainScreen extends ConsumerStatefulWidget {
 }
 
 class _MainScreenState extends ConsumerState<MainScreen> {
+  Timer? _reviewTimer;
   @override
   void initState() {
     super.initState();
+    unawaited(ref.read(reviewServiceProvider).startSession());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) showNotificationTip(context, ref.read(sharedPreferencesProvider));
+    });
+  }
+
+  @override
+  void dispose() { _reviewTimer?.cancel(); super.dispose(); }
+
+  void _scheduleReview() {
+    final service = ref.read(reviewServiceProvider);
+    if (!service.shouldPrompt || _reviewTimer?.isActive == true) return;
+    _reviewTimer = Timer(const Duration(seconds: 20), () {
+      if (!mounted || WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+          ModalRoute.of(context)?.isCurrent != true || ref.read(tabIndexProvider) != 0) return;
+      unawaited(showReviewPrompt(context, service));
     });
   }
   final List<Widget> _screens = const [
@@ -35,6 +53,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<LyricsState>(lyricsNotifierProvider, (_, next) {
+      if (next.lyrics != null && !next.isLoading) {
+        ref.read(reviewServiceProvider).recordLyrics(next.lyrics!.songId);
+        _scheduleReview();
+      }
+    });
+    ref.listen<int>(tabIndexProvider, (_, next) { if (next == 0) _scheduleReview(); });
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIndex = ref.watch(tabIndexProvider);
 

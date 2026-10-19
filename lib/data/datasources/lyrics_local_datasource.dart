@@ -43,12 +43,18 @@ class LyricsLocalDataSource {
     return result;
   }
 
-  Future<void> cacheLyrics(LyricsModel lyrics) => _write(() async {
+  Future<void> cacheLyrics(
+    LyricsModel lyrics, {
+    bool preserveUserProvided = false,
+  }) => _write(() async {
     if (lyrics.songId.isEmpty ||
         (lyrics.plainLyrics.trim().isEmpty &&
             (lyrics.lrcLyrics?.trim().isEmpty ?? true)))
       return;
     final cache = _readCache();
+    if (preserveUserProvided &&
+        _decode(cache[lyrics.songId])?.isUserProvided == true)
+      return;
     cache.remove(lyrics.songId);
     cache[lyrics.songId] = lyrics.toJson();
     while (cache.length > 100) {

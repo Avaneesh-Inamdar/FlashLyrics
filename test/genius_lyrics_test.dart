@@ -11,6 +11,7 @@ import 'package:lyricx/data/models/lyrics_model.dart';
 
 const fixture = '''<html><head>
 <meta property="og:url" content="https://genius.com/Test-artist-test-track-lyrics">
+<meta property="og:image" content="https://images.genius.com/song-cover.jpg">
 </head><body><header>Unrelated page heading</header>
 <div data-lyrics-container="true">[Verse]<br>Original &amp; test <a>words</a><br><br>Second line<button>Copy</button><span hidden>Ad</span></div>
 <div data-lyrics-container="true">[Chorus]<br>Another line<script>tracking()</script></div>
@@ -27,6 +28,7 @@ Map<String, dynamic> searchFixture({String artist = 'Test artist'}) => {
               'title': 'Test track',
               'primary_artist': {'name': artist},
               'url': 'https://genius.com/Test-artist-test-track-lyrics',
+              'song_art_image_url': 'https://images.genius.com/song-cover.jpg',
             },
           },
           {
@@ -92,6 +94,16 @@ void main() {
       );
       final first = await repository.getLyrics(playing);
       expect(first.source, 'Genius');
+      expect(
+        (first as LyricsModel).artworkUrl,
+        'https://images.genius.com/song-cover.jpg',
+      );
+      expect(
+        LyricsLocalDataSource(
+          await SharedPreferences.getInstance(),
+        ).getCachedLyrics(first.songId)!.artworkUrl,
+        first.artworkUrl,
+      );
       expect(await repository.getLyrics(playing), first);
       expect(remote.calls, 1);
       expect(requests, 2);
@@ -114,6 +126,11 @@ void main() {
       );
       expect(result.isSynced, false);
       expect(result.source, 'Genius');
+      expect(result.artworkUrl, 'https://images.genius.com/song-cover.jpg');
+      expect(
+        LyricsModel.fromJson(result.toJson()).artworkUrl,
+        result.artworkUrl,
+      );
       expect(
         LyricsModel.fromJson(result.toJson()).sourceUrl,
         song.url.toString(),

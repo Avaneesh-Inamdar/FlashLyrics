@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/lyrics_image_generator.dart';
 import '../../domain/entities/lyrics.dart';
+import '../../domain/entities/song.dart';
 import '../../data/models/lyrics_model.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
@@ -37,6 +38,16 @@ class LyricsDisplay extends ConsumerStatefulWidget {
 }
 
 class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
+  Song? _displayedSong() {
+    final lyrics = widget.lyrics;
+    if (lyrics is LyricsModel && lyrics.trackName != null && lyrics.artistName != null) {
+      final current = ref.read(lyricsNotifierProvider).currentSong;
+      return Song(id: lyrics.songId, title: lyrics.trackName!, artist: lyrics.artistName!,
+          album: lyrics.albumName, artworkUrl: lyrics.artworkUrl ??
+              (current?.title == lyrics.trackName && current?.artist == lyrics.artistName ? current?.artworkUrl : null));
+    }
+    return ref.read(lyricsNotifierProvider).currentSong;
+  }
   double _syncedFontSize = 22.0; // Default size for synced lyrics
   bool _showSizeSlider = false;
   bool get _estimateWordTiming => ref.read(settingsProvider).karaokeEnabled;
@@ -858,8 +869,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     if (!_hasSelection) return;
 
     // Get current song from lyrics provider
-    final lyricsState = ref.read(lyricsNotifierProvider);
-    final currentSong = lyricsState.currentSong;
+    final currentSong = _displayedSong();
 
     final selectedLines = _getSelectedLines(_plainLyricsLines())
         .map((l) => LrcParser.stripTimeTags(l))
@@ -1151,8 +1161,7 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
   Future<void> _shareSingleLine(BuildContext context, String line) async {
     final cleanedLine = LrcParser.stripTimeTags(line);
     // Get current song from lyrics provider
-    final lyricsState = ref.read(lyricsNotifierProvider);
-    final currentSong = lyricsState.currentSong;
+    final currentSong = _displayedSong();
 
     if (currentSong == null || cleanedLine.trim().isEmpty) return;
 

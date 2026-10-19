@@ -122,7 +122,7 @@ class _GeniusLyricsScreenState extends ConsumerState<GeniusLyricsScreen> {
       await ref.read(lyricsRepositoryProvider).cacheLyrics(model);
       if (!mounted) return;
       ref.invalidate(cachedLyricsProvider);
-      ref.read(lyricsNotifierProvider.notifier).setLyricsFromModel(model);
+      ref.read(lyricsNotifierProvider.notifier).setLyricsFromModel(model, cache: false);
       ref.read(tabIndexProvider.notifier).goToHome();
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (_) {

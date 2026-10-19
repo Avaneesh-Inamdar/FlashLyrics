@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../providers/providers.dart';
 import '../widgets/lyrics_display.dart';
+import 'import_lyrics_screen.dart';
+import '../../domain/entities/song.dart';
+import '../widgets/song_card.dart';
 
 /// Library screen with multi-select delete
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -147,6 +150,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 IconButton(icon: const Icon(Icons.delete_rounded), color: AppTheme.errorColor, tooltip: 'Delete selected', onPressed: _deleteSelected),
               ]
             : [
+                IconButton(icon: const Icon(Icons.upload_file_rounded), tooltip: 'Import lyrics',
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImportLyricsScreen()))),
                 cachedLyricsAsync.maybeWhen(
                   data: (list) => list.isNotEmpty
                       ? IconButton(icon: const Icon(Icons.delete_sweep_rounded), tooltip: 'Clear all cache', onPressed: _confirmClearAll)
@@ -280,7 +285,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(color: AppTheme.primaryColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                            child: Icon(Icons.music_note_rounded, color: AppTheme.primaryColor, size: 22),
+                            child: lyrics is LyricsModel && lyrics.artworkUrl?.startsWith('https://') == true
+                                ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(
+                                    lyrics.artworkUrl!, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Icon(Icons.music_note_rounded, color: AppTheme.primaryColor, size: 22)))
+                                : Icon(Icons.music_note_rounded, color: AppTheme.primaryColor, size: 22),
                           ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -379,6 +388,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   }
                 },
               ),
+            if (lyrics is LyricsModel && lyrics.trackName != null && lyrics.artistName != null)
+              SongCard(song: Song(id: lyrics.songId, title: lyrics.trackName!, artist: lyrics.artistName!,
+                  album: lyrics.albumName, artworkUrl: lyrics.artworkUrl)),
             LyricsDisplay(lyrics: lyrics),
             const SizedBox(height: 16),
             SizedBox(

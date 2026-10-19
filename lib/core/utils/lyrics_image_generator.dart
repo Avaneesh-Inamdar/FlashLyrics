@@ -9,6 +9,11 @@ import 'lrc_parser.dart';
 /// Generates a shareable image for selected lyrics lines.
 /// Includes song cover art and properly centered text.
 class LyricsImageGenerator {
+  /// Every export path passes through this before any text is drawn.
+  static List<String> prepareLines(List<String> lines) => lines
+      .expand((line) => line.split('\n'))
+      .map(LrcParser.stripTimeTags)
+      .where((line) => line.trim().isNotEmpty).toList();
   static Future<File?> generateLyricsImage({
     required Song song,
     required List<String> lines,
@@ -16,10 +21,7 @@ class LyricsImageGenerator {
   }) async {
     try {
       // Strip any timestamps and filter to only non-empty selected lyrics lines
-      final cleanedLines = lines
-          .map((line) => LrcParser.stripTimeTags(line))
-          .where((line) => line.trim().isNotEmpty)
-          .toList();
+      final cleanedLines = prepareLines(lines);
 
       if (cleanedLines.isEmpty) return null;
 

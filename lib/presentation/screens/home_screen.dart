@@ -1,4 +1,5 @@
 import 'genius_lyrics_screen.dart';
+import 'import_lyrics_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -181,6 +182,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.upload_file_rounded),
+          tooltip: 'Import lyrics',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ImportLyricsScreen(song: ref.read(lyricsNotifierProvider).currentSong))),
+        ),
         // Refresh button
         Padding(
           padding: const EdgeInsets.only(right: 8),
@@ -713,6 +720,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onPressed: () => _showSearchDialog(context),
               icon: const Icon(Icons.search_rounded),
               label: const Text('Search manually'),
+            ),
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ImportLyricsScreen(song: ref.read(lyricsNotifierProvider).currentSong))),
+              icon: const Icon(Icons.upload_file_rounded),
+              label: const Text('Import your own lyrics'),
             ),
             OutlinedButton.icon(
               onPressed: () {

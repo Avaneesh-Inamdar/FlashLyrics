@@ -15,6 +15,7 @@ import '../providers/providers.dart';
 import 'licenses_screen.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/notification_tip.dart';
+import '../../services/review_service.dart';
 
 /// Settings screen with modern glassmorphism UI
 class SettingsScreen extends ConsumerWidget {
@@ -376,16 +377,10 @@ class SettingsScreen extends ConsumerWidget {
                           title: 'Rate on Google Play',
                           subtitle: 'Leave a review or feedback',
                           onTap: () async {
-                            final uri = Uri.parse(
-                              'https://play.google.com/store/apps/details?id=music.flashlyrics.app&hl=en_IN',
-                            );
-                            try {
-                              await launchUrl(
-                                uri,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            } catch (e) {
-                              debugPrint('Could not launch Play Store: $e');
+                            final opened = await ref.read(reviewServiceProvider).openReviewPage();
+                            if (!opened && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                content: Text('Could not open Google Play. Please try again later.')));
                             }
                           },
                         ),
