@@ -12,23 +12,26 @@ Future<void> showReviewPrompt(
   final choice = await showDialog<ReviewChoice>(
     context: context,
     builder: (ctx) => AlertDialog(
-      icon: const Icon(Icons.rate_review_outlined),
-      title: const Text('Rate FlashLyrics'),
+      icon: const Icon(Icons.star_rate_rounded, size: 40, color: Color(0xFFFFC107)),
+      title: const Text('Enjoying FlashLyrics?'),
       content: const Text(
-        'Share your experience on Google Play. Your feedback helps improve FlashLyrics.',
+        'If FlashLyrics helps you sing along, please take a moment to rate it on Google Play. It really helps the app grow.',
       ),
+      actionsOverflowDirection: VerticalDirection.up,
+      actionsOverflowButtonSpacing: 4,
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, ReviewChoice.never),
-          child: const Text('Never'),
+          child: const Text("Don't remind me again"),
         ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, ReviewChoice.later),
-          child: const Text('Ask me later'),
+          child: const Text('Remind me later'),
         ),
-        FilledButton(
+        FilledButton.icon(
           onPressed: () => Navigator.pop(ctx, ReviewChoice.now),
-          child: const Text('Leave a review now'),
+          icon: const Icon(Icons.shop_rounded, size: 18),
+          label: const Text('Rate on Google Play'),
         ),
       ],
     ),

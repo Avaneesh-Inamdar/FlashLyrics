@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -123,7 +124,9 @@ class _SongCardState extends State<SongCard> {
         },
       );
       if (response.statusCode != 200 || response.data == null) return null;
-      final data = response.data as Map<String, dynamic>;
+      // iTunes serves JSON as text/javascript, so Dio leaves it as a string.
+      final raw = response.data;
+      final data = (raw is String ? jsonDecode(raw) : raw) as Map<String, dynamic>;
       final results = data['results'] as List<dynamic>? ?? [];
       if (results.isEmpty) return null;
       final result = results.first as Map<String, dynamic>;

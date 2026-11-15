@@ -9,6 +9,7 @@ import '../widgets/lyrics_display.dart';
 import 'import_lyrics_screen.dart';
 import '../../domain/entities/song.dart';
 import '../widgets/song_card.dart';
+import '../widgets/artwork_thumb.dart';
 
 /// Library screen with multi-select delete
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -285,11 +286,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(color: AppTheme.primaryColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                            child: lyrics is LyricsModel && lyrics.artworkUrl?.startsWith('https://') == true
-                                ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(
-                                    lyrics.artworkUrl!, fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Icon(Icons.music_note_rounded, color: AppTheme.primaryColor, size: 22)))
-                                : Icon(Icons.music_note_rounded, color: AppTheme.primaryColor, size: 22),
+                            child: ArtworkThumb(
+                              artworkUrl: lyrics is LyricsModel ? lyrics.artworkUrl : null,
+                              title: title,
+                              artist: artist,
+                              placeholder: Center(child: Icon(Icons.music_note_rounded, color: AppTheme.primaryColor, size: 22)),
+                            ),
                           ),
                     const SizedBox(width: 12),
                     Expanded(

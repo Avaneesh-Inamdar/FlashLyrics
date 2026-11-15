@@ -12,6 +12,8 @@ import '../widgets/ad_banner_widget.dart';
 import '../widgets/notification_tip.dart';
 import '../widgets/review_prompt.dart';
 import '../../services/review_service.dart';
+import '../../services/support_prompt_service.dart';
+import '../widgets/support_prompt.dart';
 
 /// Main navigation screen with custom bottom navigation bar
 class MainScreen extends ConsumerStatefulWidget {
@@ -23,6 +25,7 @@ class MainScreen extends ConsumerStatefulWidget {
 
 class _MainScreenState extends ConsumerState<MainScreen> {
   Timer? _reviewTimer;
+  Timer? _supportTimer;
   @override
   void initState() {
     super.initState();
@@ -30,10 +33,25 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) showNotificationTip(context, ref.read(sharedPreferencesProvider));
     });
+    _supportTimer = Timer(const Duration(seconds: 3), _maybeShowSupportPrompt);
+  }
+
+  /// Daily "FlashLyrics is free" reminder, only when nothing else is on screen.
+  void _maybeShowSupportPrompt() {
+    if (!mounted ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    if (ref.read(supportPromptServiceProvider).shouldShowOnOpen()) {
+      // One prompt per session: skip the rating prompt this time.
+      ref.read(reviewServiceProvider).markShown();
+      unawaited(showSupportPrompt(context, ref));
+    }
   }
 
   @override
-  void dispose() { _reviewTimer?.cancel(); super.dispose(); }
+  void dispose() { _reviewTimer?.cancel(); _supportTimer?.cancel(); super.dispose(); }
 
   void _scheduleReview() {
     final service = ref.read(reviewServiceProvider);

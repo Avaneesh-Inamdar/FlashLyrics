@@ -35,31 +35,44 @@ class ReviewService {
     );
   }
 
+  /// Songs with lyrics needed before the first rating prompt.
+  static const songsBeforePrompt = 3;
+
+  /// Extra songs to wait for after "Remind me later".
+  static const songsAfterLater = 4;
+
+  /// Counts each distinct song once per app session. The total is kept
+  /// across restarts, so the prompt appears after a few songs in total.
   void recordLyrics(String songId) {
-    if (songId.isNotEmpty) _songs.add(songId);
+    if (songId.isEmpty || !_songs.add(songId)) return;
+    prefs.setInt('review_song_count', songCount + 1);
   }
+
+  int get songCount => prefs.getInt('review_song_count') ?? 0;
 
   bool get shouldPrompt {
     final now = _clock().millisecondsSinceEpoch;
     return _started &&
         !_shown &&
         prefs.getBool('review_disabled') != true &&
-        (prefs.getInt('review_sessions') ?? 0) >= 3 &&
-        _songs.length >= 3 &&
-        now - (prefs.getInt('review_first_seen') ?? now) >=
-            const Duration(days: 2).inMilliseconds &&
+        songCount >= (prefs.getInt('review_next_song_count') ?? songsBeforePrompt) &&
         now >= (prefs.getInt('review_next_prompt') ?? 0);
   }
 
   void markShown() => _shown = true;
+
+  /// "Remind me later": ask again after a few more songs, and not before
+  /// tomorrow.
   Future<void> later() async {
     _shown = true;
+    await prefs.setInt('review_next_song_count', songCount + songsAfterLater);
     await prefs.setInt(
       'review_next_prompt',
-      _clock().add(const Duration(days: 14)).millisecondsSinceEpoch,
+      _clock().add(const Duration(days: 1)).millisecondsSinceEpoch,
     );
   }
 
+  /// "Don't remind me again", or the review page was opened.
   Future<void> never() async {
     _shown = true;
     await prefs.setBool('review_disabled', true);

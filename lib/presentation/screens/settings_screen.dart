@@ -16,6 +16,9 @@ import 'licenses_screen.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/notification_tip.dart';
 import '../../services/review_service.dart';
+import '../../services/support_ad_service.dart';
+import '../../services/support_prompt_service.dart';
+import '../widgets/support_highlight.dart';
 
 /// Settings screen with modern glassmorphism UI
 class SettingsScreen extends ConsumerWidget {
@@ -49,6 +52,52 @@ class SettingsScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
             children: [
+              _buildSection(
+                context,
+                title: 'SUPPORT DEVELOPMENT',
+                delay: 0,
+                children: [
+                  _buildGlassCard(
+                    context,
+                    child: Column(
+                      children: [
+                        SupportHighlightTarget(
+                          target: SupportHighlight.watchAd,
+                          child: _buildTapTile(
+                            context,
+                            icon: Icons.ondemand_video_rounded,
+                            title: 'Watch an Ad to Support',
+                            subtitle: 'Watch a short video ad to support development',
+                            onTap: () => SupportAd.watch(
+                              context,
+                              useTestAds: ref.read(settingsProvider).useTestAds,
+                            ),
+                          ),
+                        ),
+                        _buildDivider(context),
+                        SupportHighlightTarget(
+                          target: SupportHighlight.adsToggle,
+                          child: _buildSwitchTile(
+                            context,
+                            icon: Icons.ad_units_rounded,
+                            title: 'Turn Ads On/Off',
+                            subtitle: 'Display banner ads to support development',
+                            value: settings.enableAds,
+                            onChanged: (value) {
+                              ref
+                                  .read(settingsProvider.notifier)
+                                  .setEnableAds(value);
+                            },
+                          ),
+                        ),
+                        _buildDivider(context),
+                        _buildBuyMeACoffeeTile(context),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               _buildSection(
                 context,
                 title: 'PERMISSIONS',
@@ -333,35 +382,6 @@ class SettingsScreen extends ConsumerWidget {
                         final isListening = ref.watch(mediaNotifierProvider.select((s) => s.isListening));
                         return _buildStatusTile(context, isListening);
                       },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _buildSection(
-                context,
-                title: 'SUPPORT & ADS',
-                delay: 350,
-                children: [
-                  _buildGlassCard(
-                    context,
-                    child: Column(
-                      children: [
-                        _buildBuyMeACoffeeTile(context),
-                        _buildDivider(context),
-                        _buildSwitchTile(
-                          context,
-                          icon: Icons.ad_units_rounded,
-                          title: 'Turn Ads On/Off',
-                          subtitle: 'Display banner ads to support development',
-                          value: settings.enableAds,
-                          onChanged: (value) {
-                            ref
-                                .read(settingsProvider.notifier)
-                                .setEnableAds(value);
-                          },
-                        ),
-                      ],
                     ),
                   ),
                 ],
