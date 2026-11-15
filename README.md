@@ -28,18 +28,15 @@ FlashLyrics reads the track information shared by your music player and finds th
 
 ## A closer look
 
-<table>
-  <tr>
-    <td><img src="docs/screenshots/01-synced-lyrics.png" alt="Synced lyrics highlighted word by word" width="260" /></td>
-    <td><img src="docs/screenshots/02-floating-lyrics.png" alt="Floating lyrics window over a music player" width="260" /></td>
-    <td><img src="docs/screenshots/03-library.png" alt="Lyrics library with saved songs and artwork" width="260" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/04-playback-controls.png" alt="Playback controls on the listening screen" width="260" /></td>
-    <td><img src="docs/screenshots/05-settings.png" alt="Settings with floating window, song title and TV mode options" width="260" /></td>
-    <td></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/screenshots/01-synced-lyrics.png" alt="Synced lyrics highlighted word by word" width="260" />
+  <img src="docs/screenshots/02-floating-lyrics.png" alt="Floating lyrics window over a music player" width="260" />
+  <img src="docs/screenshots/03-library.png" alt="Lyrics library with saved songs and artwork" width="260" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/04-playback-controls.png" alt="Playback controls on the listening screen" width="260" />
+  <img src="docs/screenshots/05-settings.png" alt="Settings with floating window, song title and TV mode options" width="260" />
+</p>
 
 <sub>Captured on an Android device with NCS tracks and their official cover artwork. [Artwork credits](docs/screenshots/README.md).</sub>
 
