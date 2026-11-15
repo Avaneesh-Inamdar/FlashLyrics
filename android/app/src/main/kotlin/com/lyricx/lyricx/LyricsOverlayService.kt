@@ -72,6 +72,14 @@ class LyricsOverlayService : Service() {
     private var linesContainer: LinearLayout? = null
     private var lyricsScrollView: ScrollView? = null
     private var hintView: TextView? = null
+    // Optional window chrome (Settings: Overlay Song Title / TV Mode)
+    private var overlayLayout = OverlayLayout()
+    private var headerRowView: View? = null
+    private var dividerView: View? = null
+    private var controlsRowView: View? = null
+    private var compactCloseView: View? = null
+    // TV mode keeps the window centred at the bottom until the user moves or resizes it.
+    private var tvAutoPosition = false
     private var plainFallbackLines: List<String> = emptyList()
 
     private var initialX = 0
@@ -252,6 +260,9 @@ class LyricsOverlayService : Service() {
             stopSelf()
             return
         }
+        val newLayout = OverlayLayout.read(this)
+        val layoutChanged = newLayout != overlayLayout
+        overlayLayout = newLayout
         // Parse LRC for realtime sync; if lrc empty, fallback to plain lines
         if (lrcContent.isNotEmpty() && isValidLrc(lrcContent)) {
             parseLrc(lrcContent, lrcSyncOffset)
@@ -293,11 +304,15 @@ class LyricsOverlayService : Service() {
 
         if (isShowing) {
             updateTitle(title, artist)
+            if (layoutChanged) {
+                applyOverlayLayout()
+                if (overlayLayout.tvMode) overlayView?.let { positionForTv(it) }
+            }
             // If seek mode toggled, we need to recreate scroll behavior or update scroll view visibility
             if (seekModeChanged) {
                 try {
                     lyricsScrollView?.isVerticalScrollBarEnabled = isSeekEnabled
-                    hintView?.text = if (isSeekEnabled) "↕ scroll • tap to seek • drag header to move" else "drag header to move"
+                    hintView?.text = hintText()
                     // Force re-render to apply clickability change
                     overlayHandler.post { renderLrcLines(lastDisplayedIdx) }
                 } catch (_: Exception) {}
@@ -344,6 +359,7 @@ class LyricsOverlayService : Service() {
             layoutParams = params
             isShowing = true
             isOverlayShowing = true  // update static flag
+            if (overlayLayout.tvMode) positionForTv(view)
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -430,6 +446,7 @@ class LyricsOverlayService : Service() {
 
         header.addView(headerText)
         header.addView(closeBtn)
+        headerRowView = header
 
         // Divider
         val divider = View(ctx).apply {
@@ -438,6 +455,35 @@ class LyricsOverlayService : Service() {
                 bottomMargin = (10 * density).toInt()
             }
             setBackgroundColor(Color.parseColor("#1FFFFFFF"))
+        }
+        dividerView = divider
+
+        // Moves the window. Shared by the header, the divider and, when the header is
+        // hidden, the hint text and the lyrics area (while tap-to-seek is off).
+        val dragListener = object : View.OnTouchListener {
+            override fun onTouch(v: View, event: MotionEvent): Boolean {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialX = layoutParams?.x ?: 0
+                        initialY = layoutParams?.y ?: 0
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        return true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = (event.rawX - initialTouchX).toInt()
+                        val dy = (event.rawY - initialTouchY).toInt()
+                        tvAutoPosition = false
+                        layoutParams?.let { p ->
+                            p.x = initialX + dx
+                            p.y = initialY + dy
+                            try { windowManager?.updateViewLayout(frame, p) } catch (_: Exception) {}
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
         }
 
         // ScrollView for lyrics — enables scrolling when seekEnabled, otherwise acts as static container
@@ -450,7 +496,13 @@ class LyricsOverlayService : Service() {
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
             setBackgroundColor(Color.TRANSPARENT)
             // Intercept user scroll to pause auto-scroll
-            setOnTouchListener { _, event ->
+            setOnTouchListener { v, event ->
+                // Without a header there is no title bar to grab, so the (non-scrolling)
+                // lyrics area moves the window instead.
+                if (!isSeekEnabled && !overlayLayout.headerVisible) {
+                    dragListener.onTouch(v, event)
+                    return@setOnTouchListener true
+                }
                 when (event.action) {
                     MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                         if (isSeekEnabled) onUserScrollInteraction()
@@ -538,18 +590,34 @@ class LyricsOverlayService : Service() {
                 renderLrcLines(lastDisplayedIdx)
             }
         }
-        val hintText = if (isSeekEnabled) "↕ scroll • tap to seek • drag header to move" else "drag header to move"
         val hint = TextView(ctx).apply {
-            text = hintText
+            text = hintText()
             setTextColor(Color.parseColor("#55FFFFFF"))
             textSize = 9f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         hintView = hint
+        // Header hidden: the hint row becomes a drag handle.
+        hint.setOnTouchListener { v, event ->
+            if (overlayLayout.headerVisible) false else dragListener.onTouch(v, event)
+        }
+        // Header hidden: close button moves to the controls row.
+        val compactClose = TextView(ctx).apply {
+            text = "✕"
+            setTextColor(Color.parseColor("#8A8A9C"))
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding((4 * density).toInt(), (4 * density).toInt(), (10 * density).toInt(), (4 * density).toInt())
+            setOnClickListener { hideOverlay() }
+        }
+        compactCloseView = compactClose
+        // Close sits at the start: the end is under the resize handle's touch area.
+        controls.addView(compactClose)
         controls.addView(btnMinus)
         controls.addView(hint)
         controls.addView(btnPlus)
+        controlsRowView = controls
 
         root.addView(header)
         root.addView(divider)
@@ -569,57 +637,9 @@ class LyricsOverlayService : Service() {
         }
         frame.addView(resizeHandle)
 
-        // Drag handling on HEADER only (so lyrics area can scroll)
-        header.setOnTouchListener(object : View.OnTouchListener {
-            override fun onTouch(v: View, event: MotionEvent): Boolean {
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = layoutParams?.x ?: 0
-                        initialY = layoutParams?.y ?: 0
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        return true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = (event.rawX - initialTouchX).toInt()
-                        val dy = (event.rawY - initialTouchY).toInt()
-                        layoutParams?.let { p ->
-                            p.x = initialX + dx
-                            p.y = initialY + dy
-                            try { windowManager?.updateViewLayout(frame, p) } catch (_: Exception) {}
-                        }
-                        return true
-                    }
-                }
-                return false
-            }
-        })
-
-        // Also allow dragging via divider area for convenience
-        divider.setOnTouchListener(object : View.OnTouchListener {
-            override fun onTouch(v: View, event: MotionEvent): Boolean {
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = layoutParams?.x ?: 0
-                        initialY = layoutParams?.y ?: 0
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        return true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = (event.rawX - initialTouchX).toInt()
-                        val dy = (event.rawY - initialTouchY).toInt()
-                        layoutParams?.let { p ->
-                            p.x = initialX + dx
-                            p.y = initialY + dy
-                            try { windowManager?.updateViewLayout(frame, p) } catch (_: Exception) {}
-                        }
-                        return true
-                    }
-                }
-                return false
-            }
-        })
+        // Drag handling on HEADER (so lyrics area can scroll), and the divider for convenience
+        header.setOnTouchListener(dragListener)
+        divider.setOnTouchListener(dragListener)
 
         // Resize handling — also adjusts ScrollView height
         resizeHandle.setOnTouchListener(object : View.OnTouchListener {
@@ -640,6 +660,7 @@ class LyricsOverlayService : Service() {
                     MotionEvent.ACTION_MOVE -> {
                         val dx = event.rawX - resizeInitialTouchX
                         val dy = event.rawY - resizeInitialTouchY
+                        tvAutoPosition = false
                         var newW = (initialW + dx).toInt().coerceIn(minWidthPx, maxWidthPx)
                         var newH = (initialH + dy).toInt().coerceIn(minHeightPx, maxHeightPx)
                         layoutParams?.let { p ->
@@ -647,7 +668,7 @@ class LyricsOverlayService : Service() {
                             p.height = newH
                             try { windowManager?.updateViewLayout(frame, p) } catch (_: Exception) {}
                             // Adjust ScrollView height to fill available space
-                            val nonLyricsH = (145 * density).toInt()
+                            val nonLyricsH = (nonLyricsHeightDp() * density).toInt()
                             val newScrollH = (newH - nonLyricsH).coerceAtLeast((80 * density).toInt())
                             lyricsScrollView?.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, newScrollH)
                             lyricsScrollView?.requestLayout()
@@ -691,7 +712,96 @@ class LyricsOverlayService : Service() {
             }
         }
 
+        frame.addOnLayoutChangeListener { v, l, t, r, b, ol, ot, or, ob ->
+            if (r - l != or - ol || b - t != ob - ot) autoPositionForTv(v)
+        }
+
+        applyOverlayLayout()
         return frame
+    }
+
+    private fun hintText(): String = when {
+        overlayLayout.headerVisible ->
+            if (isSeekEnabled) "↕ scroll • tap to seek • drag header to move" else "drag header to move"
+        isSeekEnabled -> "tap to seek • drag here to move"
+        else -> "drag to move"
+    }
+
+    private fun currentLineSp(ratio: Float): Float {
+        val scale = overlayLayout.textScale
+        return (baseCurrentSp * ratio * scale).coerceIn(11f, 26f * scale)
+    }
+
+    private fun otherLineSp(ratio: Float): Float {
+        val scale = overlayLayout.textScale
+        return (baseNextSp * ratio * scale).coerceIn(9f, 18f * scale)
+    }
+
+    /** Height of everything except the lyrics area, used when the window is resized. */
+    private fun nonLyricsHeightDp(): Int {
+        var dp = 145
+        if (!overlayLayout.headerVisible) dp -= 55
+        if (!overlayLayout.controlsVisible) dp -= 35
+        return dp
+    }
+
+    /** Shows or hides the optional window chrome for the current [overlayLayout]. */
+    private fun applyOverlayLayout() {
+        val layout = overlayLayout
+        val headerVis = if (layout.headerVisible) View.VISIBLE else View.GONE
+        headerRowView?.visibility = headerVis
+        dividerView?.visibility = headerVis
+        controlsRowView?.visibility = if (layout.controlsVisible) View.VISIBLE else View.GONE
+        compactCloseView?.visibility = if (!layout.headerVisible && layout.controlsVisible) View.VISIBLE else View.GONE
+        hintView?.text = hintText()
+        // A manually resized window keeps its height; give the freed space to the lyrics.
+        val lpH = layoutParams?.height ?: 0
+        if (lpH > 0) {
+            val density = resources.displayMetrics.density
+            val newScrollH = (lpH - (nonLyricsHeightDp() * density).toInt()).coerceAtLeast((80 * density).toInt())
+            lyricsScrollView?.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, newScrollH)
+        }
+        if (isShowing) {
+            overlayHandler.post {
+                if (isShowingSkeleton) renderSkeletonLoading() else renderLrcLines(lastDisplayedIdx)
+            }
+        }
+    }
+
+    /**
+     * Area the overlay window can occupy. Read from the overlay's own window: on TVs the
+     * app's activity can run letterboxed, which shrinks the process-wide displayMetrics.
+     */
+    private fun screenFrame(view: View): android.graphics.Rect {
+        val frame = android.graphics.Rect()
+        try { view.getWindowVisibleDisplayFrame(frame) } catch (_: Exception) {}
+        if (frame.width() <= 0 || frame.height() <= 0) {
+            val dm = resources.displayMetrics
+            frame.set(0, 0, dm.widthPixels, dm.heightPixels)
+        }
+        return frame
+    }
+
+    /** TV mode: centre the window horizontally near the bottom of the screen. */
+    private fun positionForTv(view: View) {
+        tvAutoPosition = true
+        autoPositionForTv(view)
+    }
+
+    /** Re-applied whenever the window's size changes (its width follows the lyrics). */
+    private fun autoPositionForTv(view: View) {
+        if (!tvAutoPosition || !overlayLayout.tvMode || overlayView !== view) return
+        if (view.width <= 0 || view.height <= 0) return
+        val screen = screenFrame(view)
+        val margin = (32 * resources.displayMetrics.density).toInt()
+        val x = ((screen.width() - view.width) / 2).coerceAtLeast(0)
+        val y = (screen.height() - view.height - margin).coerceAtLeast(0)
+        layoutParams?.let { p ->
+            if (p.x == x && p.y == y) return
+            p.x = x
+            p.y = y
+            try { windowManager?.updateViewLayout(view, p) } catch (_: Exception) {}
+        }
     }
 
     private fun updateTitle(title: String, artist: String) {
@@ -787,9 +897,13 @@ class LyricsOverlayService : Service() {
             viewH > 0 -> viewH
             else -> (260 * density).toInt() // default wrap estimate
         }
-        // Reserve ~90dp for header+divider+controls, rest for lyrics
-        val available = (hPx - (90 * density)).toInt().coerceAtLeast((60 * density).toInt())
-        val lineH = (32 * density).toInt() // approx per line with padding
+        // Reserve ~90dp for header+divider+controls, rest for lyrics.
+        // Hidden header+divider frees ~55dp; hidden controls row frees ~35dp.
+        var reservedDp = 90f
+        if (!overlayLayout.headerVisible) reservedDp -= 55f
+        if (!overlayLayout.controlsVisible) reservedDp -= 35f
+        val available = (hPx - (reservedDp * density)).toInt().coerceAtLeast((60 * density).toInt())
+        val lineH = (32 * density * overlayLayout.textScale).toInt() // approx per line with padding
         val count = (available / lineH).coerceIn(2, 9)
         // Prefer odd count for centered current line
         return if (count % 2 == 0) count + 1 else count
@@ -993,7 +1107,7 @@ class LyricsOverlayService : Service() {
                             val tv = TextView(this).apply {
                                 text = line
                                 setTextColor(Color.WHITE)
-                                textSize = 13f
+                                textSize = 13f * overlayLayout.textScale
                                 gravity = Gravity.CENTER
                                 setPadding(0, (6*density).toInt(), 0, (6*density).toInt())
                                 // Plain lines not seekable (no timestamp) — but allow scrolling
@@ -1023,7 +1137,7 @@ class LyricsOverlayService : Service() {
                             val tv = TextView(this).apply {
                                 text = line
                                 setTextColor(Color.WHITE)
-                                textSize = 14f
+                                textSize = 14f * overlayLayout.textScale
                                 gravity = Gravity.CENTER
                                 setPadding(0, (4*density).toInt(), 0, (4*density).toInt())
                             }
@@ -1050,7 +1164,7 @@ class LyricsOverlayService : Service() {
                     val tv = TextView(this).apply {
                         text = lrcLines[i].text
                         setTextColor(if (isCurrent) Color.WHITE else Color.parseColor("#B0B0C0"))
-                        textSize = if (isCurrent) (baseCurrentSp * ratio).coerceIn(11f, 26f) else (baseNextSp * ratio).coerceIn(9f, 18f)
+                        textSize = if (isCurrent) currentLineSp(ratio) else otherLineSp(ratio)
                         if (isCurrent) typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         gravity = Gravity.CENTER
                         maxLines = 2
@@ -1101,7 +1215,7 @@ class LyricsOverlayService : Service() {
                     val tv = TextView(this).apply {
                         text = lrcLines[i].text
                         setTextColor(if (isCurrent) Color.WHITE else Color.parseColor("#B0B0C0"))
-                        textSize = if (isCurrent) (baseCurrentSp * ratio).coerceIn(11f, 26f) else (baseNextSp * ratio).coerceIn(9f, 18f)
+                        textSize = if (isCurrent) currentLineSp(ratio) else otherLineSp(ratio)
                         if (isCurrent) typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         gravity = Gravity.CENTER
                         maxLines = 2
@@ -1257,7 +1371,7 @@ class LyricsOverlayService : Service() {
                 isSeekEnabled = cacheSeek
                 overlayHandler.post {
                     lyricsScrollView?.isVerticalScrollBarEnabled = isSeekEnabled
-                    hintView?.text = if (isSeekEnabled) "↕ scroll • tap to seek • drag header to move" else "drag header to move"
+                    hintView?.text = hintText()
                     renderLrcLines(lastDisplayedIdx)
                 }
             }
@@ -1371,6 +1485,7 @@ class LyricsOverlayService : Service() {
         } finally {
             overlayView = null
             layoutParams = null
+            tvAutoPosition = false
             isShowing = false
             isOverlayShowing = false  // update static flag
             lrcLines = emptyList()
@@ -1384,6 +1499,10 @@ class LyricsOverlayService : Service() {
             autoScrollResumeRunnable?.let { overlayHandler.removeCallbacks(it) }
             autoScrollResumeRunnable = null
             hintView = null
+            headerRowView = null
+            dividerView = null
+            controlsRowView = null
+            compactCloseView = null
             lyricsScrollView = null
             linesContainer = null
             currentLineView = null

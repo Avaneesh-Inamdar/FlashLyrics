@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="204" height="72" viewBox="0 0 204 72" role="img" aria-labelledby="title">
+  <title id="title">Buy Me a Coffee</title>
+  <rect x="1" y="12" width="202" height="48" rx="7" fill="#18201b" stroke="#516259"/>
+  <g fill="none" stroke="#ffdd00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 30h16v7a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7v-7Z"/>
+    <path d="M33 32h1.5a3.5 3.5 0 0 1 0 7H33"/>
+    <path d="M16 48h20"/>
+    <path d="M22 21.5c-1.2 1.4 1.2 2.6 0 4M27 21.5c-1.2 1.4 1.2 2.6 0 4"/>
+  </g>
+  <g fill="#fff" font-family="Arial, Helvetica, sans-serif">
+    <text x="49" y="29" font-size="9" letter-spacing="1.2">SUPPORT FLASHLYRICS</text>
+    <text x="49" y="47" font-size="18" font-weight="600">Buy me a coffee</text>
+  </g>
+</svg>

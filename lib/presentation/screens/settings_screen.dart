@@ -176,6 +176,34 @@ class SettingsScreen extends ConsumerWidget {
                                 }
                               : null,
                         ),
+                        _buildDivider(context),
+                        _buildSwitchTile(
+                          context,
+                          icon: Icons.title_rounded,
+                          title: 'Overlay Song Title',
+                          subtitle: settings.floatingOverlayTvMode
+                              ? 'Hidden while TV Mode is on'
+                              : 'Show title and artist at the top of the floating window',
+                          value: settings.floatingOverlayShowHeader &&
+                              !settings.floatingOverlayTvMode,
+                          onChanged: settings.floatingOverlayTvMode
+                              ? null
+                              : (value) => ref
+                                  .read(settingsProvider.notifier)
+                                  .setFloatingOverlayShowHeader(value),
+                        ),
+                        _buildDivider(context),
+                        _buildSwitchTile(
+                          context,
+                          icon: Icons.tv_rounded,
+                          title: 'TV Mode',
+                          subtitle:
+                              'Floating window shows only lyrics, in larger text, at the bottom of the screen',
+                          value: settings.floatingOverlayTvMode,
+                          onChanged: (value) => ref
+                              .read(settingsProvider.notifier)
+                              .setFloatingOverlayTvMode(value),
+                        ),
                       ],
                     ),
                   ),

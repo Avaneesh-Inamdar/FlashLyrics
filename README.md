@@ -18,6 +18,8 @@
   <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/releases/latest"><img src="docs/buttons/download-apk.svg" alt="Download APK from GitHub Releases" height="72" /></a>
   &nbsp;
   <a href="https://github.com/Avaneesh-Inamdar/FlashLyrics/issues/new"><img src="docs/buttons/report-issue.svg" alt="Report an issue on GitHub" height="72" /></a>
+  &nbsp;
+  <a href="https://buymeacoffee.com/avaneeshinamdar"><img src="docs/buttons/buy-me-a-coffee.svg" alt="Buy Me a Coffee" height="72" /></a>
 </p>
 
 ---
@@ -44,7 +46,8 @@ FlashLyrics reads the track information shared by your music player and finds th
 | Automatic detection | Track and artist information from compatible Android media sessions. |
 | Word-by-word lyrics | Progressive fill, subtle lift and glow when genuine word timestamps are available. |
 | Synced lyrics | Automatic line scrolling, tap-to-seek, and timing adjustments. |
-| Floating window | Lyrics above your music player, with resizing and optional seeking. |
+| Floating window | Lyrics above your music player, with resizing and optional seeking. Hide the song title to save space. |
+| TV Mode | A lyrics-only floating window with larger text, placed at the bottom of the screen for Android TV and viewing from a distance. |
 | Offline library | Previously fetched lyrics saved on your device. |
 | Your own lyrics | Import a `.lrc` or `.txt` file, or paste lyrics and timestamps for a particular song. Saved locally for offline use. |
 | Manual search | Search by song or artist, choose a result, and explore Genius for harder-to-find tracks. |
@@ -120,6 +123,8 @@ The app uses Flutter and Riverpod with native Android media-session and floating
 
 Found a mismatch or a detection problem? [Open an issue](https://github.com/Avaneesh-Inamdar/FlashLyrics/issues) with the app version, Android version, music player, song and artist, and steps to reproduce it.
 
-If FlashLyrics makes your listening better, you can [support development](https://buymeacoffee.com/avaneeshinamdar).
+If FlashLyrics makes your listening better, you can support development on Buy Me a Coffee.
+
+<a href="https://buymeacoffee.com/avaneeshinamdar"><img src="docs/buttons/buy-me-a-coffee.svg" alt="Buy Me a Coffee" height="72" /></a>
 
 <sub>The download badge counts `.apk` asset downloads from public GitHub Releases, not unique users or Google Play installs. It refreshes periodically through [GitHub Actions](.github/workflows/apk-downloads.yml).</sub>

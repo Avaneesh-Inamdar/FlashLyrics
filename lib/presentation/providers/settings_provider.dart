@@ -16,6 +16,10 @@ class AppSettings {
   final bool floatingLyricsEnabled; // Enable floating overlay/PIP
   final bool
   floatingOverlaySeekEnabled; // Allow scrolling & tap-to-seek in overlay
+  final bool
+  floatingOverlayShowHeader; // Show song title/artist in floating window
+  final bool
+  floatingOverlayTvMode; // Lyrics-only floating window for TV screens
   final ThemeModeOption themeMode;
   final List<String> providerPriority;
   final String accentColor;
@@ -32,6 +36,8 @@ class AppSettings {
     this.keepScreenOn = false,
     this.floatingLyricsEnabled = false,
     this.floatingOverlaySeekEnabled = false,
+    this.floatingOverlayShowHeader = true,
+    this.floatingOverlayTvMode = false,
     this.enableAds = true,
     this.useTestAds = false,
     this.themeMode = ThemeModeOption.auto,
@@ -86,6 +92,8 @@ class AppSettings {
     bool? keepScreenOn,
     bool? floatingLyricsEnabled,
     bool? floatingOverlaySeekEnabled,
+    bool? floatingOverlayShowHeader,
+    bool? floatingOverlayTvMode,
     bool? enableAds,
     bool? useTestAds,
     ThemeModeOption? themeMode,
@@ -103,6 +111,10 @@ class AppSettings {
           floatingLyricsEnabled ?? this.floatingLyricsEnabled,
       floatingOverlaySeekEnabled:
           floatingOverlaySeekEnabled ?? this.floatingOverlaySeekEnabled,
+      floatingOverlayShowHeader:
+          floatingOverlayShowHeader ?? this.floatingOverlayShowHeader,
+      floatingOverlayTvMode:
+          floatingOverlayTvMode ?? this.floatingOverlayTvMode,
       enableAds: enableAds ?? this.enableAds,
       useTestAds: useTestAds ?? this.useTestAds,
       themeMode: themeMode ?? this.themeMode,
@@ -120,6 +132,8 @@ class AppSettings {
     'keepScreenOn': keepScreenOn,
     'floatingLyricsEnabled': floatingLyricsEnabled,
     'floatingOverlaySeekEnabled': floatingOverlaySeekEnabled,
+    'floatingOverlayShowHeader': floatingOverlayShowHeader,
+    'floatingOverlayTvMode': floatingOverlayTvMode,
     'enableAds': enableAds,
     'useTestAds': useTestAds,
     'themeMode': themeMode.name,
@@ -153,6 +167,9 @@ class AppSettings {
       floatingLyricsEnabled: json['floatingLyricsEnabled'] as bool? ?? false,
       floatingOverlaySeekEnabled:
           json['floatingOverlaySeekEnabled'] as bool? ?? false,
+      floatingOverlayShowHeader:
+          json['floatingOverlayShowHeader'] as bool? ?? true,
+      floatingOverlayTvMode: json['floatingOverlayTvMode'] as bool? ?? false,
       enableAds: json['enableAds'] as bool? ?? true,
       useTestAds: json['useTestAds'] as bool? ?? false,
       themeMode: parseThemeMode(json['themeMode']),
@@ -248,6 +265,16 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setFloatingOverlaySeekEnabled(bool value) {
     state = state.copyWith(floatingOverlaySeekEnabled: value);
+    _saveSettings();
+  }
+
+  void setFloatingOverlayShowHeader(bool value) {
+    state = state.copyWith(floatingOverlayShowHeader: value);
+    _saveSettings();
+  }
+
+  void setFloatingOverlayTvMode(bool value) {
+    state = state.copyWith(floatingOverlayTvMode: value);
     _saveSettings();
   }
 
