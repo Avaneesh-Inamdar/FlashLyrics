@@ -29,15 +29,19 @@ FlashLyrics reads the track information shared by your music player and finds th
 ## A closer look
 
 <table>
-  <tr><th>Listening · light</th><th>Listening · dark</th><th>Playback controls</th></tr>
   <tr>
-    <td><img src="docs/screenshots/listening-light-v2.png" alt="Active playback in light theme with official On & On cover art" width="260" /></td>
-    <td><img src="docs/screenshots/listening-dark-v2.png" alt="Active playback in dark theme with official On & On cover art" width="260" /></td>
-    <td><img src="docs/screenshots/playback-light-v2.png" alt="Expanded playback controls with official On & On cover art" width="260" /></td>
+    <td><img src="docs/screenshots/01-synced-lyrics.png" alt="Synced lyrics highlighted word by word" width="260" /></td>
+    <td><img src="docs/screenshots/02-floating-lyrics.png" alt="Floating lyrics window over a music player" width="260" /></td>
+    <td><img src="docs/screenshots/03-library.png" alt="Lyrics library with saved songs and artwork" width="260" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/04-playback-controls.png" alt="Playback controls on the listening screen" width="260" /></td>
+    <td><img src="docs/screenshots/05-settings.png" alt="Settings with floating window, song title and TV mode options" width="260" /></td>
+    <td></td>
   </tr>
 </table>
 
-<sub>Current app renders featuring NCS tracks and the official On & On cover artwork. The short lyric excerpt uses illustrative word timings. [Capture details and artwork credits](docs/screenshots/README.md).</sub>
+<sub>Captured on an Android device with NCS tracks and their official cover artwork. [Artwork credits](docs/screenshots/README.md).</sub>
 
 ## Built for listening
 
