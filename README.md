@@ -49,6 +49,7 @@ FlashLyrics reads the track information shared by your music player and finds th
 | Synced lyrics | Automatic line scrolling, tap-to-seek, and timing adjustments. |
 | Floating window | Lyrics above your music player, with resizing and optional seeking. Hide the song title to save space. |
 | TV Mode | A lyrics-only floating window with larger text, placed at the bottom of the screen for Android TV and viewing from a distance. |
+| Full-screen lyrics | Lyrics fill the screen with the status bar hidden, adjustable text size, tap-to-seek, and long-press to select and share lines. |
 | Offline library | Previously fetched lyrics saved on your device, with cover art from your music player. |
 | Your own lyrics | Import a `.lrc` or `.txt` file, or paste lyrics and timestamps for a particular song. Saved locally for offline use. |
 | Manual search | Search by song or artist, choose a result, and explore Genius for harder-to-find tracks. |

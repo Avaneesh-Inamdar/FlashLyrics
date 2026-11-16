@@ -1,4 +1,5 @@
 import 'genius_lyrics_screen.dart';
+import 'fullscreen_lyrics_screen.dart';
 import 'import_lyrics_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -182,6 +183,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
       actions: [
+        if (ref.watch(lyricsNotifierProvider.select((s) => s.lyrics != null)))
+          IconButton(
+            icon: const Icon(Icons.fullscreen_rounded),
+            tooltip: 'Full screen lyrics',
+            onPressed: () =>
+                Navigator.of(context).push(FullscreenLyricsScreen.route()),
+          ),
         IconButton(
           icon: const Icon(Icons.upload_file_rounded),
           tooltip: 'Import lyrics',

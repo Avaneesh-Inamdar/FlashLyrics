@@ -9,7 +9,18 @@ import '../providers/settings_provider.dart';
 /// - Uses test ad unit in debug mode to prevent policy violations
 /// - Uses production ad unit in release mode
 class AdBannerWidget extends ConsumerStatefulWidget {
-  const AdBannerWidget({super.key});
+  const AdBannerWidget({super.key, this.prodAdUnitId = mainAdUnitId});
+
+  /// Banner under the bottom navigation bar.
+  static const String mainAdUnitId = 'ca-app-pub-3987982513065210/2035205150';
+
+  /// Banner under full-screen lyrics.
+  static const String fullscreenAdUnitId =
+      'ca-app-pub-3987982513065210/6598204417';
+
+  /// Production unit used in release builds; debug builds always use
+  /// Google's test unit.
+  final String prodAdUnitId;
 
   @override
   ConsumerState<AdBannerWidget> createState() => _AdBannerWidgetState();
@@ -21,9 +32,6 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
   bool _isLoading = false;
   bool _fallbackToTest = false;
 
-  // Real Ad Unit ID provided by user
-  static const String _prodAdUnitId =
-      'ca-app-pub-3987982513065210/2035205150';
   // Google's official Android Banner Test Ad Unit ID
   static const String _testAdUnitId =
       'ca-app-pub-3940256099942544/6300978111';
@@ -32,7 +40,7 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
     if (useTestAds || !kReleaseMode || _fallbackToTest) {
       return _testAdUnitId;
     }
-    return _prodAdUnitId;
+    return widget.prodAdUnitId;
   }
 
   @override
@@ -90,7 +98,7 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
 
           // If production ad unit failed (e.g. Account not approved yet, code: 3),
           // immediately fallback to Google's official sample test ad unit.
-          if (!_fallbackToTest && unitId == _prodAdUnitId) {
+          if (!_fallbackToTest && unitId == widget.prodAdUnitId) {
             debugPrint('AdBannerWidget: Falling back to Google sample/test banner ad');
             setState(() {
               _bannerAd = null;

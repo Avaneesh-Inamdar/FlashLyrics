@@ -21,6 +21,9 @@ class SyncedLyricsDisplay extends StatefulWidget {
   final ValueChanged<int>?
   onOffsetChanged; // Callback for quick offset adjustment
 
+  /// Long-press on a line: its index and the text of every line, in order.
+  final void Function(int index, List<String> lines)? onLineLongPress;
+
   const SyncedLyricsDisplay({
     super.key,
     required this.lrcContent,
@@ -31,6 +34,7 @@ class SyncedLyricsDisplay extends StatefulWidget {
     this.fontSize = 22.0,
     this.syncOffsetMs = 0,
     this.onOffsetChanged,
+    this.onLineLongPress,
   });
 
   @override
@@ -465,6 +469,12 @@ class _SyncedLyricsDisplayState extends State<SyncedLyricsDisplay>
     return GestureDetector(
       onTap: widget.onSeek != null
           ? () => widget.onSeek!(line.timestamp)
+          : null,
+      onLongPress: widget.onLineLongPress != null
+          ? () => widget.onLineLongPress!(
+              index,
+              [for (final l in _parsedLrc!.lines) l.text],
+            )
           : null,
       child: SizedBox(
         height: _lineHeights.length > index ? _lineHeights[index] : _itemHeight,

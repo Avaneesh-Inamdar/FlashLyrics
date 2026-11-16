@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/lrc_parser.dart';
-import '../../core/utils/lyrics_image_generator.dart';
 import '../../domain/entities/lyrics.dart';
 import '../../domain/entities/song.dart';
 import '../../data/models/lyrics_model.dart';
@@ -14,6 +12,7 @@ import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/song_offset_provider.dart';
+import 'lyrics_share.dart';
 import 'synced_lyrics_display.dart';
 
 /// Widget to display lyrics with support for both plain and synced modes
@@ -38,16 +37,8 @@ class LyricsDisplay extends ConsumerStatefulWidget {
 }
 
 class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
-  Song? _displayedSong() {
-    final lyrics = widget.lyrics;
-    if (lyrics is LyricsModel && lyrics.trackName != null && lyrics.artistName != null) {
-      final current = ref.read(lyricsNotifierProvider).currentSong;
-      return Song(id: lyrics.songId, title: lyrics.trackName!, artist: lyrics.artistName!,
-          album: lyrics.albumName, artworkUrl: lyrics.artworkUrl ??
-              (current?.title == lyrics.trackName && current?.artist == lyrics.artistName ? current?.artworkUrl : null));
-    }
-    return ref.read(lyricsNotifierProvider).currentSong;
-  }
+  Song? _displayedSong() =>
+      songForLyrics(widget.lyrics, ref.read(lyricsNotifierProvider).currentSong);
   double _syncedFontSize = 22.0; // Default size for synced lyrics
   bool _showSizeSlider = false;
   bool get _estimateWordTiming => ref.read(settingsProvider).karaokeEnabled;
@@ -867,107 +858,13 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
 
   Future<void> _shareToClipboard(BuildContext context) async {
     if (!_hasSelection) return;
-
-    // Get current song from lyrics provider
-    final currentSong = _displayedSong();
-
-    final selectedLines = _getSelectedLines(_plainLyricsLines())
-        .map((l) => LrcParser.stripTimeTags(l))
-        .where((l) => l.trim().isNotEmpty)
-        .toList();
-
-    if (currentSong == null || selectedLines.isEmpty) {
-      // Fallback to text sharing if no song info
-      final formattedLyrics = '''${selectedLines.join('\n')}
-
-— Shared via FlashLyrics''';
-      Share.share(formattedLyrics);
-      return;
-    }
-
-    // Show loading indicator
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text('Creating lyrics image...'),
-          ],
-        ),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppTheme.surfaceLight,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 30),
-      ),
+    await shareLyricLines(
+      context,
+      song: _displayedSong(),
+      lines: _getSelectedLines(_plainLyricsLines()),
     );
-
-    try {
-      // Generate lyrics image
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      final imageFile = await LyricsImageGenerator.generateLyricsImage(
-        song: currentSong,
-        lines: selectedLines,
-        isDark: isDark,
-      );
-
-      if (imageFile != null && context.mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-
-        // Share the image
-        await Share.shareXFiles(
-          [XFile(imageFile.path)],
-          text:
-              '${currentSong.title} - ${currentSong.artist}\n\nShared from FlashLyrics',
-        );
-      } else if (context.mounted) {
-        // Fallback to text if image generation failed
-        ScaffoldMessenger.of(context).clearSnackBars();
-        final formattedLyrics =
-            '${currentSong.title} - ${currentSong.artist}\n\n${selectedLines.join('\n')}\n\n— Shared via FlashLyrics';
-        Share.share(formattedLyrics);
-      }
-
-      // Clear selection and exit share mode after sharing
-      if (!mounted) return;
-      _exitShareMode();
-    } catch (e) {
-      // Restore state even on error
-      if (mounted) {
-        _exitShareMode();
-      }
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.redAccent,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error sharing: $e')),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.surfaceLight,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    // Clear selection and exit share mode after sharing
+    if (mounted) _exitShareMode();
   }
 
   Future<void> _handleShareTap(
@@ -1158,87 +1055,6 @@ class _LyricsDisplayState extends ConsumerState<LyricsDisplay> {
     });
   }
 
-  Future<void> _shareSingleLine(BuildContext context, String line) async {
-    final cleanedLine = LrcParser.stripTimeTags(line);
-    // Get current song from lyrics provider
-    final currentSong = _displayedSong();
-
-    if (currentSong == null || cleanedLine.trim().isEmpty) return;
-
-    // Show loading indicator
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text('Creating lyrics image...'),
-          ],
-        ),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppTheme.surfaceLight,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 30),
-      ),
-    );
-
-    try {
-      // Generate lyrics image
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      final imageFile = await LyricsImageGenerator.generateLyricsImage(
-        song: currentSong,
-        lines: [cleanedLine],
-        isDark: isDark,
-      );
-
-      if (imageFile != null && context.mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-
-        // Share the image
-        await Share.shareXFiles(
-          [XFile(imageFile.path)],
-          text:
-              '${currentSong.title} - ${currentSong.artist}\n\nShared from FlashLyrics',
-        );
-      } else if (context.mounted) {
-        // Fallback to text if image generation failed
-        ScaffoldMessenger.of(context).clearSnackBars();
-        final formattedLyrics =
-            '${currentSong.title} - ${currentSong.artist}\n\n$cleanedLine\n\n— Shared via FlashLyrics';
-        Share.share(formattedLyrics);
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.redAccent,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error sharing: $e')),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.surfaceLight,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
+  Future<void> _shareSingleLine(BuildContext context, String line) =>
+      shareLyricLines(context, song: _displayedSong(), lines: [line]);
 }
