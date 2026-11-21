@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/device_profile.dart';
 import '../../services/media_detection_service.dart';
 import '../providers/settings_provider.dart';
 import '../providers/media_provider.dart';
@@ -52,6 +53,8 @@ class SettingsScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
             children: [
+              // Ads and donation links are phone/tablet only.
+              if (!ref.watch(isTelevisionProvider)) ...[
               _buildSection(
                 context,
                 title: 'SUPPORT DEVELOPMENT',
@@ -68,10 +71,7 @@ class SettingsScreen extends ConsumerWidget {
                             icon: Icons.ondemand_video_rounded,
                             title: 'Watch an Ad to Support',
                             subtitle: 'Watch a short video ad to support development',
-                            onTap: () => SupportAd.watch(
-                              context,
-                              useTestAds: ref.read(settingsProvider).useTestAds,
-                            ),
+                            onTap: () => SupportAd.watch(context),
                           ),
                         ),
                         _buildDivider(context),
@@ -98,6 +98,7 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 24),
+              ],
               _buildSection(
                 context,
                 title: 'PERMISSIONS',

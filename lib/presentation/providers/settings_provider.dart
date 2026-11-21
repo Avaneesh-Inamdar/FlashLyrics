@@ -25,8 +25,6 @@ class AppSettings {
   final String accentColor;
   final int lyricsSyncOffset; // Offset in milliseconds for lyrics sync
   final bool enableAds; // Toggle Google Mobile Ads (AdMob)
-  final bool
-  useTestAds; // Use Google sample/test banner ads (useful until account is approved)
 
   const AppSettings({
     this.fontSize = 18.0,
@@ -39,7 +37,6 @@ class AppSettings {
     this.floatingOverlayShowHeader = true,
     this.floatingOverlayTvMode = false,
     this.enableAds = true,
-    this.useTestAds = false,
     this.themeMode = ThemeModeOption.auto,
     this.accentColor = 'emerald',
     this.lyricsSyncOffset = 0,
@@ -95,7 +92,6 @@ class AppSettings {
     bool? floatingOverlayShowHeader,
     bool? floatingOverlayTvMode,
     bool? enableAds,
-    bool? useTestAds,
     ThemeModeOption? themeMode,
     List<String>? providerPriority,
     String? accentColor,
@@ -116,7 +112,6 @@ class AppSettings {
       floatingOverlayTvMode:
           floatingOverlayTvMode ?? this.floatingOverlayTvMode,
       enableAds: enableAds ?? this.enableAds,
-      useTestAds: useTestAds ?? this.useTestAds,
       themeMode: themeMode ?? this.themeMode,
       accentColor: accentColor ?? this.accentColor,
       lyricsSyncOffset: lyricsSyncOffset ?? this.lyricsSyncOffset,
@@ -135,7 +130,6 @@ class AppSettings {
     'floatingOverlayShowHeader': floatingOverlayShowHeader,
     'floatingOverlayTvMode': floatingOverlayTvMode,
     'enableAds': enableAds,
-    'useTestAds': useTestAds,
     'themeMode': themeMode.name,
     'accentColor': accentColor,
     'lyricsSyncOffset': lyricsSyncOffset,
@@ -171,7 +165,6 @@ class AppSettings {
           json['floatingOverlayShowHeader'] as bool? ?? true,
       floatingOverlayTvMode: json['floatingOverlayTvMode'] as bool? ?? false,
       enableAds: json['enableAds'] as bool? ?? true,
-      useTestAds: json['useTestAds'] as bool? ?? false,
       themeMode: parseThemeMode(json['themeMode']),
       accentColor: json['accentColor'] as String? ?? 'emerald',
       lyricsSyncOffset: json['lyricsSyncOffset'] as int? ?? 0,
@@ -280,11 +273,6 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setEnableAds(bool value) {
     state = state.copyWith(enableAds: value);
-    _saveSettings();
-  }
-
-  void setUseTestAds(bool value) {
-    state = state.copyWith(useTestAds: value);
     _saveSettings();
   }
 

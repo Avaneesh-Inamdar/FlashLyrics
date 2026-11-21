@@ -54,7 +54,7 @@ class GeniusLyricsDataSource {
     receiveTimeout: const Duration(seconds: 8),
     validateStatus: (_) => true,
     headers: {
-      'User-Agent': 'FlashLyrics/1.4.5',
+      'User-Agent': 'FlashLyrics/1.5.0',
       'Accept': 'application/json, text/html',
     },
   );

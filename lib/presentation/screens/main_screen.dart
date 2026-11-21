@@ -1,7 +1,9 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/device_profile.dart';
+import '../widgets/update_available_dialog.dart';
 import '../providers/providers.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
@@ -26,6 +28,7 @@ class MainScreen extends ConsumerStatefulWidget {
 class _MainScreenState extends ConsumerState<MainScreen> {
   Timer? _reviewTimer;
   Timer? _supportTimer;
+  Timer? _updateTimer;
   @override
   void initState() {
     super.initState();
@@ -33,7 +36,24 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) showNotificationTip(context, ref.read(sharedPreferencesProvider));
     });
-    _supportTimer = Timer(const Duration(seconds: 3), _maybeShowSupportPrompt);
+    // The daily support reminder is about ads, which are not shown on TV.
+    if (!ref.read(isTelevisionProvider)) {
+      _supportTimer = Timer(const Duration(seconds: 3), _maybeShowSupportPrompt);
+    }
+    _updateTimer = Timer(const Duration(seconds: 5), _checkForUpdate);
+  }
+
+  /// Once per app start: if Google Play has a newer version, tell the user
+  /// to download it from the Play Store (never while another dialog is up).
+  Future<void> _checkForUpdate() async {
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (!mounted || (state != null && state != AppLifecycleState.resumed)) {
+      return;
+    }
+    await maybeShowUpdateNotice(
+      context,
+      service: ref.read(updateCheckServiceProvider),
+    );
   }
 
   /// Daily "FlashLyrics is free" reminder, only when nothing else is on screen.
@@ -51,7 +71,12 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   @override
-  void dispose() { _reviewTimer?.cancel(); _supportTimer?.cancel(); super.dispose(); }
+  void dispose() {
+    _reviewTimer?.cancel();
+    _supportTimer?.cancel();
+    _updateTimer?.cancel();
+    super.dispose();
+  }
 
   void _scheduleReview() {
     final service = ref.read(reviewServiceProvider);
@@ -64,9 +89,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
   final List<Widget> _screens = const [
     HomeScreen(),
-    SearchScreen(),
-    LibraryScreen(),
-    SettingsScreen(),
+    AdaptiveWidth(child: SearchScreen()),
+    AdaptiveWidth(child: LibraryScreen()),
+    AdaptiveWidth(child: SettingsScreen()),
   ];
 
   @override
@@ -80,19 +105,93 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     ref.listen<int>(tabIndexProvider, (_, next) { if (next == 0) _scheduleReview(); });
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIndex = ref.watch(tabIndexProvider);
+    final wide = DeviceProfile.useRail(MediaQuery.sizeOf(context).width);
+
+    final pages = IndexedStack(index: currentIndex, children: [
+      for (var i = 0; i < _screens.length; i++)
+        TickerMode(enabled: i == currentIndex, child: _screens[i]),
+    ]);
+
+    if (wide) {
+      // Tablets and TVs: navigation rail on the side, ad banner (phones and
+      // tablets only) under the content.
+      return Scaffold(
+        extendBody: false,
+        body: Row(
+          children: [
+            _buildRail(isDark, currentIndex),
+            VerticalDivider(
+              width: 1,
+              color: isDark ? AppTheme.surfaceLight : AppTheme.lightSurfaceLight,
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(child: pages),
+                  const AdBannerWidget(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       extendBody: false,
-      body: IndexedStack(index: currentIndex, children: [
-        for (var i = 0; i < _screens.length; i++)
-          TickerMode(enabled: i == currentIndex, child: _screens[i]),
-      ]),
+      body: pages,
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const AdBannerWidget(),
           _buildBottomNavigationBar(isDark, currentIndex),
         ],
+      ),
+    );
+  }
+
+  void _select(int index, int currentIndex) {
+    if (index == 1 && currentIndex == 1) {
+      ref.read(searchFocusTriggerProvider.notifier).state++;
+    } else {
+      ref.read(tabIndexProvider.notifier).setIndex(index);
+    }
+  }
+
+  Widget _buildRail(bool isDark, int currentIndex) {
+    final tv = ref.watch(isTelevisionProvider);
+    // On TV the remote starts on the navigation rail.
+    return FocusScope(
+      autofocus: tv,
+      child: SafeArea(
+      right: false,
+      child: NavigationRail(
+        selectedIndex: currentIndex,
+        extended: tv,
+        minExtendedWidth: 200,
+        labelType: tv ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+        backgroundColor: isDark ? AppTheme.backgroundColor : AppTheme.lightBackground,
+        indicatorColor: AppTheme.primaryColor.withValues(alpha: 0.16),
+        onDestinationSelected: (index) => _select(index, currentIndex),
+        destinations: const [
+          NavigationRailDestination(
+            icon: Icon(Icons.graphic_eq),
+            label: Text('Listening'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.search),
+            label: Text('Search'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.library_music_outlined),
+            label: Text('Library'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.tune),
+            label: Text('Settings'),
+          ),
+        ],
+      ),
       ),
     );
   }
@@ -112,13 +211,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             ? AppTheme.backgroundColor
             : AppTheme.lightBackground,
         indicatorColor: AppTheme.primaryColor.withValues(alpha: 0.16),
-        onDestinationSelected: (index) {
-          if (index == 1 && currentIndex == 1) {
-            ref.read(searchFocusTriggerProvider.notifier).state++;
-          } else {
-            ref.read(tabIndexProvider.notifier).setIndex(index);
-          }
-        },
+        onDestinationSelected: (index) => _select(index, currentIndex),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.graphic_eq),

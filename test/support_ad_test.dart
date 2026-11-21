@@ -38,10 +38,11 @@ void main() {
     );
   });
 
-  test('debug and test-ad builds never request the real ad unit', () {
-    expect(SupportAd.unitId(useTestAds: true), SupportAd.testUnitId);
-    // Tests run in debug mode, so even useTestAds=false stays on test ads.
-    expect(SupportAd.unitId(useTestAds: false), SupportAd.testUnitId);
+  test('release builds request the real unit, debug builds the test unit', () {
+    expect(SupportAd.unitId(release: true), SupportAd.prodUnitId);
+    expect(SupportAd.unitId(release: false), SupportAd.testUnitId);
+    // Tests run in debug mode.
+    expect(SupportAd.unitId(), SupportAd.testUnitId);
     expect(SupportAd.prodUnitId, 'ca-app-pub-3987982513065210/5885312023');
     expect(SupportAd.testUnitId, 'ca-app-pub-3940256099942544/5224354917');
   });

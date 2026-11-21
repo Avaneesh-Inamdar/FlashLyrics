@@ -130,6 +130,12 @@ class MainActivity : FlutterFragmentActivity() {
                             result.error("UPDATE_CHECK_FAILED", error.message, null)
                         }
                 }
+                "isTelevision" -> {
+                    result.success(isTelevision())
+                }
+                "isTelevision" -> {
+                    result.success(isTelevision())
+                }
                 "checkNotificationAccess" -> {
                     result.success(isNotificationAccessEnabled())
                 }
@@ -363,8 +369,29 @@ class MainActivity : FlutterFragmentActivity() {
     }
     
     private fun openNotificationAccessSettings() {
-        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-        startActivity(intent)
+        // Some TV firmwares have no notification-access screen; never crash.
+        startSettingsSafely(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+
+    private fun startSettingsSafely(intent: Intent) {
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Settings screen unavailable: ${intent.action}", e)
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                )
+            } catch (e2: Exception) {
+                Log.w(TAG, "App settings unavailable too", e2)
+            }
+        }
+    }
+
+    private fun isTelevision(): Boolean {
+        val ui = getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        return ui?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||
+            packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
     }
     
     private fun checkOverlayPermission(): Boolean {
@@ -381,7 +408,7 @@ class MainActivity : FlutterFragmentActivity() {
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 android.net.Uri.parse("package:$packageName")
             )
-            startActivity(intent)
+            startSettingsSafely(intent)
         }
     }
     

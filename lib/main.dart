@@ -7,14 +7,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/utils/device_profile.dart';
 import 'presentation/providers/providers.dart';
 import 'presentation/screens/main_screen.dart';
+import 'presentation/widgets/tv_focus_ring.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Google Mobile Ads asynchronously
-  MobileAds.instance.initialize();
+  final isTv = await DeviceProfile.detectTelevision();
+
+  // Google Mobile Ads does not serve TV, so it is not started there.
+  if (!isTv) MobileAds.instance.initialize();
 
   // Optimize image cache for RAM (limit to 50 images, 20MB)
   PaintingBinding.instance.imageCache.maximumSize = 50;
@@ -23,11 +27,14 @@ void main() async {
   // Enable high-refresh-rate input resampling and vsync for 90/120Hz displays
   GestureBinding.instance.resamplingEnabled = true;
 
-  // Set preferred orientations
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // Phones stay in portrait; tablets and TVs can rotate / use landscape.
+  final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+  final screen = view == null
+      ? Size.zero
+      : view.physicalSize / view.devicePixelRatio;
+  await SystemChrome.setPreferredOrientations(
+    DeviceProfile.orientationsFor(DeviceProfile.formFactor(screen, isTv: isTv)),
+  );
 
   // Enable edge-to-edge display
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -39,6 +46,7 @@ void main() async {
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+        isTelevisionProvider.overrideWithValue(isTv),
       ],
       child: const FlashLyricsApp(),
     ),
@@ -109,6 +117,23 @@ class _FlashLyricsAppState extends ConsumerState<FlashLyricsApp>
     }
   }
 
+  /// Ten-foot UI: slightly larger text and a clearly visible focus highlight
+  /// so the remote's D-pad always shows where the selection is.
+  static Widget _tvBuilder(BuildContext context, Widget? child) {
+    final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    return MediaQuery(
+      data: media.copyWith(textScaler: const TextScaler.linear(1.15)),
+      child: Theme(
+        data: theme.copyWith(
+          focusColor: AppTheme.primaryColor.withValues(alpha: 0.35),
+          visualDensity: VisualDensity.comfortable,
+        ),
+        child: TvFocusRing(child: child ?? const SizedBox.shrink()),
+      ),
+    );
+  }
+
   ThemeMode _getThemeMode(ThemeModeOption option) {
     switch (option) {
       case ThemeModeOption.auto:
@@ -151,6 +176,7 @@ class _FlashLyricsAppState extends ConsumerState<FlashLyricsApp>
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
+      builder: ref.watch(isTelevisionProvider) ? _tvBuilder : null,
       home: const MainScreen(),
     );
   }

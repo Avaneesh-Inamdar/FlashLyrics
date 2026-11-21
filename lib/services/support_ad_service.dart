@@ -15,9 +15,9 @@ class SupportAd {
   /// Google's official Android rewarded test unit.
   static const testUnitId = 'ca-app-pub-3940256099942544/5224354917';
 
-  /// Debug builds and the "test ads" setting never request real ads.
-  static String unitId({required bool useTestAds}) =>
-      useTestAds || !kReleaseMode ? testUnitId : prodUnitId;
+  /// Release builds always request the real unit; debug builds never do.
+  static String unitId({bool release = kReleaseMode}) =>
+      release ? prodUnitId : testUnitId;
 
   static bool _busy = false;
 
@@ -25,7 +25,6 @@ class SupportAd {
   /// and a message afterwards. Repeated taps while busy are ignored.
   static Future<void> watch(
     BuildContext context, {
-    required bool useTestAds,
     Duration timeout = const Duration(seconds: 20),
   }) async {
     if (_busy) return;
@@ -65,7 +64,7 @@ class SupportAd {
       final loaded = Completer<RewardedAd?>();
       var abandoned = false;
       await RewardedAd.load(
-        adUnitId: unitId(useTestAds: useTestAds),
+        adUnitId: unitId(),
         request: const AdRequest(),
         rewardedAdLoadCallback: RewardedAdLoadCallback(
           onAdLoaded: (ad) {

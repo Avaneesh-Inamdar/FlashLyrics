@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/device_profile.dart';
 import '../../services/media_detection_service.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/media_provider.dart';
@@ -294,6 +295,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildBody(LyricsState lyricsState, bool hasPermission, bool hasMediaSong) {
     // If we have lyrics from search, show them regardless of permission status
     if (lyricsState.currentSong != null) {
+      final width = MediaQuery.sizeOf(context).width;
+      if (DeviceProfile.useTwoPane(width)) {
+        // Tablet / TV landscape: song and controls on the left, lyrics on
+        // the right, each scrolling on its own.
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 400,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 4),
+                    SongCard(song: lyricsState.currentSong!),
+                    const SizedBox(height: 8),
+                    if (hasMediaSong) _buildControls(lyricsState),
+                    if (lyricsState.lyrics != null) const FloatingLyricsButton(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 20, top: 4, bottom: 40),
+                  child: _buildLyricsSection(lyricsState),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
@@ -303,8 +340,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SongCard(song: lyricsState.currentSong!),
             const SizedBox(height: 8),
             // Song controls with seek bar + next/prev
-            if (hasMediaSong)
-              ExpansionTile(
+            if (hasMediaSong) _buildControls(lyricsState),
+            const SizedBox(height: 6),
+            const SizedBox(height: 4),
+            _buildLyricsSection(lyricsState),
+            if (lyricsState.lyrics != null) const FloatingLyricsButton(),
+            const SizedBox(height: 40),
+          ],
+        ),
+      );
+    }
+
+    if (!hasPermission) {
+      return _buildPermissionRequest();
+    }
+
+    if (lyricsState.isLoading) {
+      return _buildLoadingState();
+    }
+
+    if (lyricsState.error != null) {
+      return _buildErrorState(lyricsState.error!);
+    }
+
+    return Consumer(
+      builder: (context, ref, _) {
+        final isListening = ref.watch(mediaNotifierProvider.select((s) => s.isListening));
+        return _buildEmptyState(isListening: isListening);
+      },
+    );
+  }
+
+  Widget _buildControls(LyricsState lyricsState) {
+    return ExpansionTile(
                 shape: const Border(),
                 collapsedShape: const Border(),
                 title: const Text('Playback controls'),
@@ -342,60 +410,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   },
                 ),
               )],
-              ),
-            const SizedBox(height: 6),
-            const SizedBox(height: 4),
-            if (lyricsState.isLoading && lyricsState.lyrics == null)
-              _buildLoadingState()
-            else if (lyricsState.error == 'Lyrics not found')
-              _buildNoLyricsState()
-            else if (lyricsState.error != null && lyricsState.lyrics == null)
-              _buildErrorState(lyricsState.error!)
-            else if (lyricsState.lyrics != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Consumer(
-                  builder: (context, ref, _) {
-                    final currentPos = ref.watch(mediaNotifierProvider.select((s) => s.currentPosition));
-                    final playing = ref.watch(mediaNotifierProvider.select((s) => s.isPlaying));
-                    return LyricsDisplay(
-                      lyrics: lyricsState.lyrics!,
-                      currentPosition: currentPos,
-                      isPlaying: playing,
-                      onSeek: (position) {
-                        ref.read(mediaNotifierProvider.notifier).seekTo(position);
-                      },
-                    );
-                  },
-                ),
-              )
-            else
-              _buildNoLyricsState(),
-            if (lyricsState.lyrics != null) const FloatingLyricsButton(),
-            const SizedBox(height: 40),
-          ],
+    );
+  }
+
+  Widget _buildLyricsSection(LyricsState lyricsState) {
+    if (lyricsState.isLoading && lyricsState.lyrics == null) {
+      return _buildLoadingState();
+    } else if (lyricsState.error == 'Lyrics not found') {
+      return _buildNoLyricsState();
+    } else if (lyricsState.error != null && lyricsState.lyrics == null) {
+      return _buildErrorState(lyricsState.error!);
+    } else if (lyricsState.lyrics != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Consumer(
+          builder: (context, ref, _) {
+            final currentPos = ref.watch(mediaNotifierProvider.select((s) => s.currentPosition));
+            final playing = ref.watch(mediaNotifierProvider.select((s) => s.isPlaying));
+            return LyricsDisplay(
+              lyrics: lyricsState.lyrics!,
+              currentPosition: currentPos,
+              isPlaying: playing,
+              onSeek: (position) {
+                ref.read(mediaNotifierProvider.notifier).seekTo(position);
+              },
+            );
+          },
         ),
       );
     }
-
-    if (!hasPermission) {
-      return _buildPermissionRequest();
-    }
-
-    if (lyricsState.isLoading) {
-      return _buildLoadingState();
-    }
-
-    if (lyricsState.error != null) {
-      return _buildErrorState(lyricsState.error!);
-    }
-
-    return Consumer(
-      builder: (context, ref, _) {
-        final isListening = ref.watch(mediaNotifierProvider.select((s) => s.isListening));
-        return _buildEmptyState(isListening: isListening);
-      },
-    );
+    return _buildNoLyricsState();
   }
 
   Widget _buildLoadingState() {
@@ -433,7 +477,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildPermissionRequest() {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
+       child: Padding(
         padding: const EdgeInsets.all(24),
         child: PermissionCard(
           onRequestPermission: () {
@@ -443,6 +488,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ref.read(mediaNotifierProvider.notifier).checkPermissions();
           },
         ),
+       ),
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0);
   }
@@ -450,7 +496,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildEmptyState({required bool isListening}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
+       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -508,6 +555,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _buildFunTipsSection(),
           ],
         ),
+       ),
       ),
     );
   }
