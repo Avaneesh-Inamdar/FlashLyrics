@@ -7,6 +7,6 @@
 - **Android TV:** the D-pad can now leave the side menu and reach the content, including "Connect music player" and every Settings option. A new on-screen **Pointer** (side menu, or the Menu button) lets you click lyric lines, hold OK to long-press, and push against the screen edge to scroll.
 - Build: Android Gradle Plugin 9.0 and R8 optimized resource shrinking, as recommended by Google Play.
 
-Download: `FlashLyrics-1.5.1.apk` (version 1.5.1, build 22).
+Download: `FlashLyrics-1.5.1.apk` (version 1.5.1, build 23).
 
 Validation: 200 Flutter tests passed. The signed release build was smoke-tested on an Android 15 emulator (clean install, app tour, 400 random UI events, no crashes).

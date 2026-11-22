@@ -34,7 +34,7 @@ void main() {
       .firstMatch(File('pubspec.yaml').readAsStringSync())!;
     expect(AppConstants.appVersion, version.group(1));
     expect(AppConstants.appVersion, '1.5.1');
-    expect(version.group(2), '22');
+    expect(version.group(2), '23');
   });
   for (final preferred in ['lrclib', 'textyl']) {
     test('verified lyrics return without waiting for a stalled provider ($preferred)', () async {
