@@ -17,6 +17,7 @@ class AdBannerWidget extends ConsumerStatefulWidget {
   const AdBannerWidget({
     super.key,
     this.prodAdUnitId = mainAdUnitId,
+    this.fallbackAdUnitId,
     @visibleForTesting this.release = kReleaseMode,
   });
 
@@ -33,11 +34,21 @@ class AdBannerWidget extends ConsumerStatefulWidget {
   /// Production unit used in release builds.
   final String prodAdUnitId;
 
+  /// Real unit tried right away when [prodAdUnitId] has no ad to show.
+  final String? fallbackAdUnitId;
+
   /// Whether this is a release build. Only tests change it.
   final bool release;
 
   static String unitIdFor(String prodAdUnitId, {bool release = kReleaseMode}) =>
       release ? prodAdUnitId : testAdUnitId;
+
+  /// Tablets get the 728x90 leaderboard when it fits: the small 320x50 banner
+  /// has far fewer advertisers on large screens.
+  static AdSize sizeFor(Size screen) =>
+      screen.shortestSide >= 600 && screen.width >= 740
+      ? AdSize.leaderboard
+      : AdSize.banner;
 
   /// How long to wait before retrying after [failures] failed loads in a
   /// row: 1, 2, 4 and 8 minutes, then every 10 minutes.
@@ -55,6 +66,7 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
   bool _loading = false;
   int _failures = 0;
   Timer? _retry;
+  bool _useFallback = false;
 
   @override
   void initState() {
@@ -70,13 +82,14 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
     _retry?.cancel();
     _loading = true;
 
+    final fallback = widget.fallbackAdUnitId;
     final unitId = AdBannerWidget.unitIdFor(
-      widget.prodAdUnitId,
+      _useFallback && fallback != null ? fallback : widget.prodAdUnitId,
       release: widget.release,
     );
     BannerAd(
       adUnitId: unitId,
-      size: AdSize.banner,
+      size: AdBannerWidget.sizeFor(MediaQuery.sizeOf(context)),
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
@@ -92,6 +105,13 @@ class _AdBannerWidgetState extends ConsumerState<AdBannerWidget> {
           ad.dispose();
           _loading = false;
           if (!mounted) return;
+          if (fallback != null && !_useFallback) {
+            // This unit has no ad (common on tablets): try the other one now.
+            _useFallback = true;
+            _load();
+            return;
+          }
+          _useFallback = false;
           _failures++;
           final delay = AdBannerWidget.retryDelay(_failures);
           debugPrint(

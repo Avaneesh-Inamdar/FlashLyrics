@@ -1,5 +1,7 @@
 import '../../core/utils/song_key.dart';
+import '../../core/utils/ttml_lyrics.dart';
 import 'dart:async';
+import 'dart:convert';
 import '../../core/utils/word_lyrics.dart';
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
@@ -331,6 +333,10 @@ class LyricsRemoteDataSource {
         return await _fetchFromChartLyrics(artist, title, songId);
       case 'netease':
         return await _fetchFromNetEase(artist, title, songId);
+      case 'kugou':
+        return await _fetchFromKuGou(artist, title, songId);
+      case 'betterlyrics':
+        return await _fetchFromBetterLyrics(artist, title, songId);
       default:
         return null;
     }
@@ -717,6 +723,10 @@ class LyricsRemoteDataSource {
           return _fetchFromLyrist(a, t, sid);
         case 'netease':
           return _fetchFromNetEase(a, t, sid);
+        case 'kugou':
+          return _fetchFromKuGou(a, t, sid);
+        case 'betterlyrics':
+          return _fetchFromBetterLyrics(a, t, sid);
         default:
           return Future.value(null);
       }
@@ -798,6 +808,10 @@ class LyricsRemoteDataSource {
         id = 'lyrist';
       else if (src.contains('netease'))
         id = 'netease';
+      else if (src.contains('kugou'))
+        id = 'kugou';
+      else if (src.contains('betterlyrics'))
+        id = 'betterlyrics';
       else
         id = src;
       final idx = effectivePriority.indexOf(id);
@@ -1048,6 +1062,12 @@ class LyricsRemoteDataSource {
     final effectivePriority = List<String>.from(
       providerPriority ?? ApiConstants.apiPriority,
     );
+    if (providerPriority != null) {
+      // Keep newly-added providers working for users with a saved order.
+      for (final p in const ['kugou', 'betterlyrics']) {
+        if (!effectivePriority.contains(p)) effectivePriority.add(p);
+      }
+    }
     if (hasCJK && effectivePriority.contains('netease')) {
       effectivePriority.remove('netease');
       effectivePriority.insert(0, 'netease');
@@ -1126,6 +1146,28 @@ class LyricsRemoteDataSource {
               _fetchAndAddLrclib(a, t, sid, results, seen, dedupeKey),
             );
             break;
+          case 'kugou':
+            futures.add(
+              _fetchAndAddGeneric(
+                () => _fetchFromKuGou(a, t, sid),
+                results,
+                seen,
+                dedupeKey,
+              ),
+            );
+            break;
+          case 'betterlyrics':
+            if (a.isNotEmpty) {
+              futures.add(
+                _fetchAndAddGeneric(
+                  () => _fetchFromBetterLyrics(a, t, sid),
+                  results,
+                  seen,
+                  dedupeKey,
+                ),
+              );
+            }
+            break;
         }
       }
     }
@@ -1194,6 +1236,8 @@ class LyricsRemoteDataSource {
         if (s.contains('lyrics.ovh')) return 'lyrics.ovh';
         if (s.contains('lyrist')) return 'lyrist';
         if (s.contains('netease')) return 'netease';
+        if (s.contains('kugou')) return 'kugou';
+        if (s.contains('betterlyrics')) return 'betterlyrics';
         return s;
       }
 
@@ -1559,5 +1603,146 @@ class LyricsRemoteDataSource {
     } catch (e) {
       return null;
     }
+  }
+
+  Future<dynamic> _getJson(String url, Map<String, dynamic> query) async {
+    final response = await _dio.get<String>(
+      url,
+      queryParameters: query,
+      options: Options(
+        sendTimeout: ApiConstants.connectionTimeout,
+        receiveTimeout: ApiConstants.receiveTimeout,
+        responseType: ResponseType.plain,
+      ),
+    );
+    final body = response.data;
+    if (response.statusCode != 200 || body == null || body.isEmpty) return null;
+    return jsonDecode(body);
+  }
+
+  /// Fetch from KuGou - free, key-less, strong synced (LRC) coverage for
+  /// Asian and international music. Used by Metrolist / ArchiveTune.
+  Future<LyricsModel?> _fetchFromKuGou(
+    String artist,
+    String title,
+    String songId,
+  ) async {
+    try {
+      if (title.trim().isEmpty) return null;
+      final keyword = '$artist $title'.trim();
+      final search = await _getJson(ApiConstants.kuGouSongSearchApi, {
+        'version': 9108,
+        'plat': 0,
+        'pagesize': 8,
+        'showtype': 0,
+        'keyword': keyword,
+      });
+      final songs = ((search?['data']?['info']) as List<dynamic>?) ?? const [];
+      var tried = 0;
+      for (final raw in songs) {
+        if (tried >= 3) break;
+        if (raw is! Map) continue;
+        final songName = (raw['songname'] as String?) ?? '';
+        final singer = (raw['singername'] as String?) ?? '';
+        final hash = raw['hash'] as String?;
+        if (hash == null || hash.isEmpty) continue;
+        if (!_isGoodMatch(artist, title, singer, songName)) continue;
+        tried++;
+        final durationSec = (raw['duration'] as num?)?.toInt() ?? 0;
+        final lyricSearch = await _getJson(ApiConstants.kuGouLyricSearchApi, {
+          'ver': 1,
+          'man': 'yes',
+          'client': 'pc',
+          'keyword': keyword,
+          'duration': durationSec * 1000,
+          'hash': hash,
+        });
+        final candidates =
+            (lyricSearch?['candidates'] as List<dynamic>?) ?? const [];
+        if (candidates.isEmpty) continue;
+        final candidate = candidates.first as Map;
+        final download = await _getJson(ApiConstants.kuGouLyricDownloadApi, {
+          'fmt': 'lrc',
+          'charset': 'utf8',
+          'client': 'pc',
+          'ver': 1,
+          'id': candidate['id'],
+          'accesskey': candidate['accesskey'],
+        });
+        final content = download?['content'] as String?;
+        if (content == null || content.isEmpty) continue;
+        var lrc = utf8.decode(base64.decode(content), allowMalformed: true);
+        lrc = lrc.replaceAll('\uFEFF', '').replaceAll('\r\n', '\n').trim();
+        if (lrc.isEmpty) continue;
+        final isLrc = LrcParser.containsTimeTags(lrc);
+        final plain = isLrc ? LrcParser.toCleanPlainText(lrc) : lrc;
+        if (plain.trim().isEmpty) continue;
+        return LyricsModel(
+          id: '${songId}_kugou_$hash',
+          songId: songId,
+          plainLyrics: plain.trim(),
+          lrcLyrics: isLrc ? lrc : null,
+          isSynced: isLrc,
+          source: 'KuGou',
+          fetchedAt: DateTime.now(),
+          artistName: singer.isNotEmpty ? singer : null,
+          trackName: songName.isNotEmpty ? songName : null,
+        );
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fetch from BetterLyrics - free, key-less, Apple-Music-grade synced lyrics
+  /// delivered as TTML. Used by Metrolist / ArchiveTune.
+  Future<LyricsModel?> _fetchFromBetterLyrics(
+    String artist,
+    String title,
+    String songId,
+  ) async {
+    try {
+      // The API matches on artist + title; a title-only query is unreliable.
+      if (artist.trim().isEmpty || title.trim().isEmpty) return null;
+      final data = await _getJson(ApiConstants.betterLyricsApi, {
+        's': title,
+        'a': artist,
+      });
+      final ttml = data is Map ? data['ttml'] as String? : null;
+      if (ttml == null || ttml.isEmpty) return null;
+      final lrc = ttmlToLrc(ttml);
+      if (lrc == null) return null;
+      final plain = LrcParser.toCleanPlainText(lrc);
+      if (plain.trim().isEmpty) return null;
+      return LyricsModel(
+        id: '${songId}_betterlyrics',
+        songId: songId,
+        plainLyrics: plain.trim(),
+        lrcLyrics: lrc,
+        isSynced: true,
+        source: 'BetterLyrics',
+        fetchedAt: DateTime.now(),
+        artistName: artist,
+        trackName: title,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _fetchAndAddGeneric(
+    Future<LyricsModel?> Function() fetch,
+    List<LyricsModel> results,
+    Set<String> seen,
+    String Function(LyricsModel) keyFn,
+  ) async {
+    try {
+      final result = await fetch();
+      if (result != null && result.plainLyrics.isNotEmpty) {
+        final key = keyFn(result);
+        if (seen.add(key)) results.add(result);
+      }
+    } catch (_) {}
   }
 }

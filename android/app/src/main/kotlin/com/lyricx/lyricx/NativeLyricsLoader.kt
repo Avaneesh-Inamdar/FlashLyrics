@@ -50,7 +50,7 @@ object NativeLyricsLoader {
         try {
             connection.connectTimeout = 4000
             connection.readTimeout = 5000
-            connection.setRequestProperty("User-Agent", "FlashLyrics/1.5.0 (https://github.com/Avaneesh-Inamdar/FlashLyrics)")
+            connection.setRequestProperty("User-Agent", "FlashLyrics/1.5.1 (https://github.com/Avaneesh-Inamdar/FlashLyrics)")
             if (connection.responseCode != 200) return null
             val body = connection.inputStream.use { input ->
                 val output = java.io.ByteArrayOutputStream()

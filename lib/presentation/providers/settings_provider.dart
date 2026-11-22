@@ -43,6 +43,8 @@ class AppSettings {
     this.providerPriority = const [
       'lrclib',
       'textyl',
+      'kugou',
+      'betterlyrics',
       'chartlyrics',
       'lyrics.ovh',
       'lyrist',
@@ -66,6 +68,8 @@ class AppSettings {
   static const Map<String, String> providerNames = {
     'lrclib': 'LRCLIB (Synced)',
     'textyl': 'Textyl (Synced)',
+    'kugou': 'KuGou (Synced)',
+    'betterlyrics': 'BetterLyrics (Synced)',
     'chartlyrics': 'ChartLyrics',
     'lyrics.ovh': 'Lyrics.ovh',
     'lyrist': 'Lyrist',
@@ -168,19 +172,34 @@ class AppSettings {
       themeMode: parseThemeMode(json['themeMode']),
       accentColor: json['accentColor'] as String? ?? 'emerald',
       lyricsSyncOffset: json['lyricsSyncOffset'] as int? ?? 0,
-      providerPriority:
-          (json['providerPriority'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
+      providerPriority: _migrateProviders(
+        (json['providerPriority'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toList(),
+      ),
+    );
+  }
+
+  /// Saved orders from older versions lack newer providers; append them so
+  /// users can reorder them and they take part in lookups.
+  static List<String> _migrateProviders(List<String>? saved) {
+    final list = List<String>.from(
+      saved ??
           const [
             'lrclib',
             'textyl',
+            'kugou',
+            'betterlyrics',
             'chartlyrics',
             'lyrics.ovh',
             'lyrist',
             'netease',
           ],
     );
+    for (final id in providerNames.keys) {
+      if (!list.contains(id)) list.add(id);
+    }
+    return list;
   }
 
   /// Font size presets

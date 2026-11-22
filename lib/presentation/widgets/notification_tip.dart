@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+const String notificationTipSeenKey = 'notification_float_tip_seen_v1';
+
 Future<void> showNotificationTip(
   BuildContext context,
   SharedPreferences prefs, {
   bool always = false,
 }) async {
-  const key = 'notification_float_tip_seen_v1';
+  const key = notificationTipSeenKey;
   if (!always && prefs.getBool(key) == true) return;
   if (!context.mounted) return;
   final acknowledged = await showDialog<bool>(

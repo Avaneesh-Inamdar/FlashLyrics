@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/device_profile.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/lyrics_model.dart';
 import '../../domain/entities/lyrics.dart';
@@ -11,6 +12,7 @@ import '../providers/providers.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/lyrics_share.dart';
 import '../widgets/synced_lyrics_display.dart';
+import '../widgets/tv_pointer.dart';
 
 /// Lyrics-only view that fills the screen.
 ///
@@ -188,6 +190,7 @@ class _FullscreenLyricsScreenState
                 ),
               const AdBannerWidget(
                 prodAdUnitId: AdBannerWidget.fullscreenAdUnitId,
+                fallbackAdUnitId: AdBannerWidget.mainAdUnitId,
               ),
             ],
           ),
@@ -313,6 +316,12 @@ class _Header extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          // TV: lyric lines can't take focus, so offer the pointer here.
+          Consumer(
+            builder: (context, ref, _) => ref.watch(isTelevisionProvider)
+                ? const TvPointerButton(extended: false)
+                : const SizedBox.shrink(),
           ),
           IconButton(
             tooltip: 'Smaller text',

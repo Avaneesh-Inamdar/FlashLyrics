@@ -10,7 +10,9 @@ import 'core/theme/app_theme.dart';
 import 'core/utils/device_profile.dart';
 import 'presentation/providers/providers.dart';
 import 'presentation/screens/main_screen.dart';
+import 'presentation/screens/app_tour_screen.dart';
 import 'presentation/widgets/tv_focus_ring.dart';
+import 'presentation/widgets/tv_pointer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +49,7 @@ void main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
         isTelevisionProvider.overrideWithValue(isTv),
+        appTourAutoShowProvider.overrideWithValue(true),
       ],
       child: const FlashLyricsApp(),
     ),
@@ -106,7 +109,26 @@ class _FlashLyricsAppState extends ConsumerState<FlashLyricsApp>
     }
   }
 
+  void _refreshPermissions() {
+    ref.invalidate(hasNotificationAccessProvider);
+    ref.invalidate(hasOverlayPermissionProvider);
+    try {
+      ref.read(overlayProvider.notifier).checkPermission();
+    } catch (_) {}
+    try {
+      ref.read(mediaNotifierProvider.notifier).checkPermissions();
+    } catch (_) {}
+  }
+
   void _refreshMediaDetection() {
+    // Back from the system settings screens: re-read the permission state so
+    // Settings and the Listening screen stop showing "Grant" right away.
+    _refreshPermissions();
+    // Android can take a moment to bind the notification listener after the
+    // user grants access, so look once more shortly after.
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) _refreshPermissions();
+    });
     // Trigger a refresh of media detection when app resumes
     try {
       ref
@@ -129,7 +151,9 @@ class _FlashLyricsAppState extends ConsumerState<FlashLyricsApp>
           focusColor: AppTheme.primaryColor.withValues(alpha: 0.35),
           visualDensity: VisualDensity.comfortable,
         ),
-        child: TvFocusRing(child: child ?? const SizedBox.shrink()),
+        child: TvPointerOverlay(
+          child: TvFocusRing(child: child ?? const SizedBox.shrink()),
+        ),
       ),
     );
   }

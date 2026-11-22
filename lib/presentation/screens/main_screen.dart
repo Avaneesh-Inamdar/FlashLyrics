@@ -12,6 +12,8 @@ import 'search_screen.dart';
 
 import '../widgets/ad_banner_widget.dart';
 import '../widgets/notification_tip.dart';
+import '../widgets/tv_pointer.dart';
+import 'app_tour_screen.dart';
 import '../widgets/review_prompt.dart';
 import '../../services/review_service.dart';
 import '../../services/support_prompt_service.dart';
@@ -34,7 +36,19 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     super.initState();
     unawaited(ref.read(reviewServiceProvider).startSession());
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) showNotificationTip(context, ref.read(sharedPreferencesProvider));
+      if (!mounted) return;
+      final prefs = ref.read(sharedPreferencesProvider);
+      if (ref.read(appTourAutoShowProvider) && shouldShowAppTour(prefs)) {
+        // The tour already explains the Float action, so skip the tip.
+        prefs.setBool(notificationTipSeenKey, true);
+        unawaited(showAppTour(context, prefs));
+      } else {
+        showNotificationTip(context, prefs);
+      }
+      // On a TV the remote starts on the navigation rail.
+      if (ref.read(isTelevisionProvider)) {
+        FocusScope.of(context).nextFocus();
+      }
     });
     // The daily support reminder is about ads, which are not shown on TV.
     if (!ref.read(isTelevisionProvider)) {
@@ -47,7 +61,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   /// to download it from the Play Store (never while another dialog is up).
   Future<void> _checkForUpdate() async {
     final state = WidgetsBinding.instance.lifecycleState;
-    if (!mounted || (state != null && state != AppLifecycleState.resumed)) {
+    if (!mounted ||
+        (state != null && state != AppLifecycleState.resumed) ||
+        ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
     await maybeShowUpdateNotice(
@@ -109,7 +125,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
     final pages = IndexedStack(index: currentIndex, children: [
       for (var i = 0; i < _screens.length; i++)
-        TickerMode(enabled: i == currentIndex, child: _screens[i]),
+        // Hidden tabs must not take part in D-pad focus traversal.
+        ExcludeFocus(
+          excluding: i != currentIndex,
+          child: TickerMode(enabled: i == currentIndex, child: _screens[i]),
+        ),
     ]);
 
     if (wide) {
@@ -125,11 +145,15 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               color: isDark ? AppTheme.surfaceLight : AppTheme.lightSurfaceLight,
             ),
             Expanded(
-              child: Column(
-                children: [
-                  Expanded(child: pages),
-                  const AdBannerWidget(),
-                ],
+              // Keep content and the ad clear of the 3-button navigation bar.
+              child: SafeArea(
+                left: false,
+                child: Column(
+                  children: [
+                    Expanded(child: pages),
+                    const AdBannerWidget(),
+                  ],
+                ),
               ),
             ),
           ],
@@ -160,12 +184,18 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   Widget _buildRail(bool isDark, int currentIndex) {
     final tv = ref.watch(isTelevisionProvider);
-    // On TV the remote starts on the navigation rail.
-    return FocusScope(
-      autofocus: tv,
+    // A plain traversal group (not a FocusScope): a FocusScope would trap the
+    // D-pad on the rail so the remote could never reach the content.
+    return FocusTraversalGroup(
       child: SafeArea(
       right: false,
       child: NavigationRail(
+        trailing: tv
+            ? const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: TvPointerButton(),
+              )
+            : null,
         selectedIndex: currentIndex,
         extended: tv,
         minExtendedWidth: 200,

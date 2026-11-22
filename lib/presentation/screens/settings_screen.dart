@@ -16,6 +16,7 @@ import '../providers/providers.dart';
 import 'licenses_screen.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/notification_tip.dart';
+import 'app_tour_screen.dart';
 import '../../services/review_service.dart';
 import '../../services/support_ad_service.dart';
 import '../../services/support_prompt_service.dart';
@@ -410,6 +411,14 @@ class SettingsScreen extends ConsumerWidget {
                           subtitle: 'Check Google Play for a newer release',
                           onTap: () => showDialog<void>(context: context,
                               builder: (_) => const UpdateDialog()),
+                        ),
+                        _buildDivider(context),
+                        _buildTapTile(context,
+                          icon: Icons.tour_rounded,
+                          title: 'App tour',
+                          subtitle: 'See where everything is',
+                          onTap: () => showAppTour(context,
+                              ref.read(sharedPreferencesProvider)),
                         ),
                         _buildDivider(context),
                         _buildTapTile(context,

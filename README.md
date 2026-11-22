@@ -78,6 +78,8 @@ Spotify, YouTube Music, Apple Music and other Android players can work when they
 | Source | Used for |
 | --- | --- |
 | [LRCLIB](https://lrclib.net) | Line timestamps, word timestamps where available, and plain lyrics. |
+| KuGou | Synced (LRC) lyrics with wide coverage of Asian and international songs. No key needed. |
+| BetterLyrics | Synced lyrics converted from TTML. No key needed. |
 | [Textyl](https://textyl.co) | An additional synced-lyrics source. |
 | [ChartLyrics](https://www.chartlyrics.com) | Plain-text lyrics. |
 | [Lyrics.ovh](https://lyrics.ovh) | Plain-text fallback. |

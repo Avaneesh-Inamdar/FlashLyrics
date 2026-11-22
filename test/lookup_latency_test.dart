@@ -33,8 +33,8 @@ void main() {
     final version = RegExp(r'^version: ([^+]+)\+(\d+)', multiLine: true)
       .firstMatch(File('pubspec.yaml').readAsStringSync())!;
     expect(AppConstants.appVersion, version.group(1));
-    expect(AppConstants.appVersion, '1.5.0');
-    expect(version.group(2), '21');
+    expect(AppConstants.appVersion, '1.5.1');
+    expect(version.group(2), '22');
   });
   for (final preferred in ['lrclib', 'textyl']) {
     test('verified lyrics return without waiting for a stalled provider ($preferred)', () async {

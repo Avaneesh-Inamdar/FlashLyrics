@@ -930,6 +930,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           if (s.contains('lyrics.ovh')) return 'lyrics.ovh';
           if (s.contains('lyrist')) return 'lyrist';
           if (s.contains('netease')) return 'netease';
+          if (s.contains('kugou')) return 'kugou';
+          if (s.contains('betterlyrics')) return 'betterlyrics';
           return s;
         }
 

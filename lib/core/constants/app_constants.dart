@@ -21,6 +21,17 @@ class ApiConstants {
   /// NetEase Music - Free API (popular in Asia, supports Chinese)
   static const String netEaseApi = 'https://music.163.com/api/search/get';
 
+  /// KuGou - free, no key (synced LRC)
+  static const String kuGouSongSearchApi =
+      'https://mobileservice.kugou.com/api/v3/search/song';
+  static const String kuGouLyricSearchApi = 'https://lyrics.kugou.com/search';
+  static const String kuGouLyricDownloadApi =
+      'https://lyrics.kugou.com/download';
+
+  /// BetterLyrics - free, no key (TTML synced lyrics)
+  static const String betterLyricsApi =
+      'https://lyrics-api.boidu.dev/getLyrics';
+
   /// Genius Lyrics (requires auth token but has free tier)
   static const String geniusSearchApi = 'https://api.genius.com/search';
 
@@ -38,6 +49,8 @@ class ApiConstants {
   static const List<String> apiPriority = [
     'lrclib', // ⭐ Best for synced lyrics (LRC format)
     'textyl', // ⭐ Good synced lyrics backup
+    'kugou', // Synced LRC, no key, wide catalogue
+    'betterlyrics', // Synced (TTML), no key
     'chartlyrics', // ⭐ Free, no auth, plain lyrics
     'lyrics.ovh', // Plain lyrics fallback
     'lyrist', // Additional fallback
@@ -58,7 +71,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = 'FlashLyrics';
-  static const String appVersion = '1.5.0';
+  static const String appVersion = '1.5.1';
 
   /// Cache keys
   static const String lyricsCacheKey = 'lyrics_cache';
