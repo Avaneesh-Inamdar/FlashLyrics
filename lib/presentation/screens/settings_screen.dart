@@ -14,6 +14,7 @@ import '../providers/settings_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/providers.dart';
 import 'licenses_screen.dart';
+import 'app_filter_screen.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/notification_tip.dart';
 import 'app_tour_screen.dart';
@@ -138,6 +139,28 @@ class SettingsScreen extends ConsumerWidget {
                                 .read(settingsProvider.notifier)
                                 .setAutoRefresh(value);
                           },
+                        ),
+                        _buildDivider(context),
+                        _buildTapTile(
+                          context,
+                          icon: Icons.filter_list_rounded,
+                          title: 'App Filter (Blacklist / Whitelist)',
+                          subtitle: switch (settings.appFilterMode) {
+                            AppFilterMode.off => 'Detecting all media apps',
+                            AppFilterMode.blacklist =>
+                              settings.blacklistedApps.isEmpty
+                                  ? 'Blacklist • No apps excluded'
+                                  : 'Blacklist • ${settings.blacklistedApps.length} excluded',
+                            AppFilterMode.whitelist =>
+                              settings.whitelistedApps.isEmpty
+                                  ? 'Whitelist • No apps allowed'
+                                  : 'Whitelist • ${settings.whitelistedApps.length} allowed',
+                          },
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AppFilterScreen(),
+                            ),
+                          ),
                         ),
                         _buildDivider(context),
                         _buildSwitchTile(

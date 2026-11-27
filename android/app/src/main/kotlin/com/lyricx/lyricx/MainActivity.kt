@@ -253,6 +253,30 @@ class MainActivity : FlutterFragmentActivity() {
                     val success = enterPipMode()
                     result.success(success)
                 }
+                "getInstalledApps" -> {
+                    Thread {
+                        val apps = AppFilterManager.getInstalledApps(this)
+                        runOnUiThread { result.success(apps) }
+                    }.start()
+                }
+                "setAppFilter" -> {
+                    val mode = call.argument<String>("mode") ?: AppFilterManager.MODE_OFF
+                    val blacklist = call.argument<List<String>>("blacklist") ?: emptyList()
+                    val whitelist = call.argument<List<String>>("whitelist") ?: emptyList()
+                    AppFilterManager.setFilter(this, mode, blacklist, whitelist)
+                    MediaNotificationListener.refreshActiveSessions()
+                    if (isNotificationAccessEnabled() && queryMediaSessionsDirect() == null) {
+                        MusicNotificationManager.cancelMusicNotification(this)
+                    }
+                    result.success(true)
+                }
+                "getAppFilter" -> {
+                    result.success(mapOf(
+                        "mode" to AppFilterManager.getMode(this),
+                        "blacklist" to AppFilterManager.getBlacklist(this).toList(),
+                        "whitelist" to AppFilterManager.getWhitelist(this).toList()
+                    ))
+                }
                 "checkPostNotificationPermission" -> {
                     val granted = if (Build.VERSION.SDK_INT >= 33) {
                         ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -424,6 +448,7 @@ class MainActivity : FlutterFragmentActivity() {
             
             val componentName = ComponentName(this, MediaNotificationListener::class.java)
             val controllers = msm.getActiveSessions(componentName)
+            AppFilterManager.recordSeenPackages(this, controllers.mapNotNull { it.packageName }, packageName)
             
             Log.d(TAG, "Direct query found ${controllers.size} active sessions")
             
@@ -433,6 +458,10 @@ class MainActivity : FlutterFragmentActivity() {
             
             for (controller in controllers) {
                 val pkg = controller.packageName
+                if (!AppFilterManager.isPackageAllowed(this, pkg, packageName)) {
+                    Log.d(TAG, "Session filtered out by AppFilterManager: pkg=$pkg")
+                    continue
+                }
                 val state = controller.playbackState?.state
                 val metadata = controller.metadata
                 val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
@@ -693,7 +722,7 @@ class MainActivity : FlutterFragmentActivity() {
                 return false
             }
             
-            val controller = sessionTokens[0]
+            val controller = selectBestController(sessionTokens) ?: return false
             val transportControls = controller.transportControls
             
             transportControls.seekTo(position)
@@ -770,10 +799,11 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun selectBestController(controllers: List<android.media.session.MediaController>): android.media.session.MediaController? {
-        // Prefer playing controller, otherwise first with metadata
+        // Prefer playing controller, otherwise first allowed controller
         var best: android.media.session.MediaController? = null
         var bestPlaying = false
         for (c in controllers) {
+            if (!AppFilterManager.isPackageAllowed(this, c.packageName, packageName)) continue
             val isPlaying = c.playbackState?.state == PlaybackState.STATE_PLAYING
             if (isPlaying && !bestPlaying) {
                 best = c

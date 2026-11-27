@@ -71,7 +71,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = 'FlashLyrics';
-  static const String appVersion = '1.5.1';
+  static const String appVersion = '1.5.2';
 
   /// Cache keys
   static const String lyricsCacheKey = 'lyrics_cache';

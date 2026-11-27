@@ -294,9 +294,20 @@ class MediaNotificationListener : NotificationListenerService() {
         }
     }
 
+    private fun isPackageAllowed(pkg: String?): Boolean =
+        AppFilterManager.isPackageAllowed(
+            this,
+            pkg,
+            packageName,
+            requireSupportedOrMediaInDefaultMode = true,
+            isSupportedOrMedia = { p -> SUPPORTED_PACKAGES.contains(p) || isMediaApp(p) }
+        )
+
     private fun onActiveSessionsChanged(controllers: List<MediaController>?) {
-        val eligible = controllers.orEmpty().filter {
-            it.packageName != packageName && (SUPPORTED_PACKAGES.contains(it.packageName) || isMediaApp(it.packageName))
+        val allControllers = controllers.orEmpty()
+        AppFilterManager.recordSeenPackages(this, allControllers.mapNotNull { it.packageName }, packageName)
+        val eligible = allControllers.filter {
+            isPackageAllowed(it.packageName)
         }.groupBy { it.packageName }.mapValues { (_, sessions) ->
             sessions.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: sessions.first()
         }
@@ -673,7 +684,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     private fun showMusicNotification(title: String, artist: String, source: String, isPlaying: Boolean, packageName: String) {
-        if (!SUPPORTED_PACKAGES.contains(packageName) && !isMediaApp(packageName)) {
+        if (!isPackageAllowed(packageName)) {
             return
         }
         MusicNotificationManager.showMusicNotification(this, title, artist, source, isPlaying, packageName)
@@ -699,7 +710,7 @@ class MediaNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
         sbn?.let {
-            if (it.packageName != packageName && (SUPPORTED_PACKAGES.contains(it.packageName) || isMediaApp(it.packageName))) {
+            if (isPackageAllowed(it.packageName)) {
                 // Trigger session check when media notification posted
                 handler.postDelayed({ checkActiveSessions() }, 100)
             }

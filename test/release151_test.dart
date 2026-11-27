@@ -55,7 +55,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('version', () {
-    test('is 1.5.1', () => expect(AppConstants.appVersion, '1.5.1'));
+    test('is 1.5.2', () => expect(AppConstants.appVersion, '1.5.2'));
   });
 
   group('TTML', () {
@@ -246,7 +246,7 @@ void main() {
       expect(find.byType(AppTourScreen), findsNothing);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(appTourSeenKey), '1.5.1');
+      expect(prefs.getString(appTourSeenKey), AppConstants.appVersion);
       expect(shouldShowAppTour(prefs), false);
       await tester.pump(const Duration(seconds: 6));
     });
@@ -295,7 +295,7 @@ void main() {
         tester,
         tv: false,
         autoTour: true,
-        prefs: {appTourSeenKey: '1.5.1'},
+        prefs: {appTourSeenKey: AppConstants.appVersion},
       );
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.byType(AppTourScreen), findsNothing);

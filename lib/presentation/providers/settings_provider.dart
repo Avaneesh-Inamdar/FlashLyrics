@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/media_detection_service.dart';
 import 'providers.dart';
 
 /// Theme mode options
 enum ThemeModeOption { auto, light, dark }
+
+/// Per-app media detection filter mode
+enum AppFilterMode { off, blacklist, whitelist }
 
 /// App settings state
 class AppSettings {
@@ -25,6 +29,9 @@ class AppSettings {
   final String accentColor;
   final int lyricsSyncOffset; // Offset in milliseconds for lyrics sync
   final bool enableAds; // Toggle Google Mobile Ads (AdMob)
+  final AppFilterMode appFilterMode;
+  final List<String> blacklistedApps;
+  final List<String> whitelistedApps;
 
   const AppSettings({
     this.fontSize = 18.0,
@@ -40,6 +47,9 @@ class AppSettings {
     this.themeMode = ThemeModeOption.auto,
     this.accentColor = 'emerald',
     this.lyricsSyncOffset = 0,
+    this.appFilterMode = AppFilterMode.off,
+    this.blacklistedApps = const [],
+    this.whitelistedApps = const [],
     this.providerPriority = const [
       'lrclib',
       'textyl',
@@ -100,6 +110,9 @@ class AppSettings {
     List<String>? providerPriority,
     String? accentColor,
     int? lyricsSyncOffset,
+    AppFilterMode? appFilterMode,
+    List<String>? blacklistedApps,
+    List<String>? whitelistedApps,
   }) {
     return AppSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -119,6 +132,9 @@ class AppSettings {
       themeMode: themeMode ?? this.themeMode,
       accentColor: accentColor ?? this.accentColor,
       lyricsSyncOffset: lyricsSyncOffset ?? this.lyricsSyncOffset,
+      appFilterMode: appFilterMode ?? this.appFilterMode,
+      blacklistedApps: blacklistedApps ?? this.blacklistedApps,
+      whitelistedApps: whitelistedApps ?? this.whitelistedApps,
       providerPriority: providerPriority ?? this.providerPriority,
     );
   }
@@ -137,6 +153,9 @@ class AppSettings {
     'themeMode': themeMode.name,
     'accentColor': accentColor,
     'lyricsSyncOffset': lyricsSyncOffset,
+    'appFilterMode': appFilterMode.name,
+    'blacklistedApps': blacklistedApps,
+    'whitelistedApps': whitelistedApps,
     'providerPriority': providerPriority,
   };
 
@@ -156,6 +175,16 @@ class AppSettings {
       return ThemeModeOption.auto;
     }
 
+    AppFilterMode parseAppFilterMode(dynamic value) {
+      if (value is String) {
+        return AppFilterMode.values.firstWhere(
+          (e) => e.name == value,
+          orElse: () => AppFilterMode.off,
+        );
+      }
+      return AppFilterMode.off;
+    }
+
     return AppSettings(
       fontSize: (json['fontSize'] as num?)?.toDouble() ?? 18.0,
       autoRefresh: json['autoRefresh'] as bool? ?? true,
@@ -172,6 +201,15 @@ class AppSettings {
       themeMode: parseThemeMode(json['themeMode']),
       accentColor: json['accentColor'] as String? ?? 'emerald',
       lyricsSyncOffset: json['lyricsSyncOffset'] as int? ?? 0,
+      appFilterMode: parseAppFilterMode(json['appFilterMode']),
+      blacklistedApps: (json['blacklistedApps'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+      whitelistedApps: (json['whitelistedApps'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
       providerPriority: _migrateProviders(
         (json['providerPriority'] as List<dynamic>?)
             ?.map((e) => e as String)
@@ -227,6 +265,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   SettingsNotifier(this._prefs) : super(const AppSettings()) {
     _loadSettings();
+    _syncAppFilterToNative();
   }
 
   void _loadSettings() {
@@ -331,9 +370,50 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     setProviderPriority(newList);
   }
 
+  Future<void> _syncAppFilterToNative() async {
+    await MediaDetectionService.setAppFilter(
+      mode: state.appFilterMode.name,
+      blacklist: state.blacklistedApps,
+      whitelist: state.whitelistedApps,
+    );
+  }
+
+  Future<void> setAppFilterMode(AppFilterMode mode) async {
+    state = state.copyWith(appFilterMode: mode);
+    await _saveSettings();
+    await _syncAppFilterToNative();
+  }
+
+  Future<void> toggleAppInFilter(String packageName, {required bool isBlacklist}) async {
+    final pkg = packageName.trim();
+    if (pkg.isEmpty) return;
+    final current = List<String>.from(
+      isBlacklist ? state.blacklistedApps : state.whitelistedApps,
+    );
+    if (current.contains(pkg)) {
+      current.remove(pkg);
+    } else {
+      current.add(pkg);
+    }
+    state = isBlacklist
+        ? state.copyWith(blacklistedApps: current)
+        : state.copyWith(whitelistedApps: current);
+    await _saveSettings();
+    await _syncAppFilterToNative();
+  }
+
+  Future<void> clearAppFilterList({required bool isBlacklist}) async {
+    state = isBlacklist
+        ? state.copyWith(blacklistedApps: const [])
+        : state.copyWith(whitelistedApps: const []);
+    await _saveSettings();
+    await _syncAppFilterToNative();
+  }
+
   void resetToDefaults() {
     state = const AppSettings();
     _saveSettings();
+    _syncAppFilterToNative();
   }
 }
 

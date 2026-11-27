@@ -681,6 +681,58 @@ class MediaDetectionService {
 
   Future<bool> cacheOverlayLyrics({required String title, required String artist, String lrcLyrics = '', String plainLyrics = '', int syncOffsetMs = 0, bool enableSeek = false}) =>
       cacheOverlayLyricsStatic(title: title, artist: artist, lrcLyrics: lrcLyrics, plainLyrics: plainLyrics, syncOffsetMs: syncOffsetMs, enableSeek: enableSeek);
+
+  /// Fetch launchable & previously seen media apps for blacklist/whitelist UI.
+  static Future<List<InstalledAppInfo>> getInstalledApps() async {
+    try {
+      final result = await _methodChannel.invokeMethod<List<dynamic>>('getInstalledApps');
+      if (result == null) return const [];
+      return result
+          .whereType<Map<dynamic, dynamic>>()
+          .map(
+            (m) => InstalledAppInfo(
+              packageName: (m['packageName'] as String?) ?? '',
+              appName: (m['appName'] as String?) ?? '',
+              isSeenMedia: (m['isSeenMedia'] as bool?) ?? false,
+            ),
+          )
+          .where((app) => app.packageName.isNotEmpty)
+          .toList();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Error getting installed apps: $e');
+      return const [];
+    }
+  }
+
+  /// Sync app filter configuration (off / blacklist / whitelist) to native Android.
+  static Future<void> setAppFilter({
+    required String mode,
+    required List<String> blacklist,
+    required List<String> whitelist,
+  }) async {
+    try {
+      await _methodChannel.invokeMethod('setAppFilter', {
+        'mode': mode,
+        'blacklist': blacklist,
+        'whitelist': whitelist,
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('Error setting app filter: $e');
+    }
+  }
+}
+
+/// Basic metadata for an installed or detected app.
+class InstalledAppInfo {
+  final String packageName;
+  final String appName;
+  final bool isSeenMedia;
+
+  const InstalledAppInfo({
+    required this.packageName,
+    required this.appName,
+    this.isSeenMedia = false,
+  });
 }
 
 /// Represents the current playback position with metadata

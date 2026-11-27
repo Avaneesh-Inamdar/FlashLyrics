@@ -30,7 +30,13 @@ object NativePlayback {
 
     fun current(context: Context): NativeSong? = try {
         val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-        NativeSong.select(manager.getActiveSessions(ComponentName(context, MediaNotificationListener::class.java))
-            .mapNotNull(::song), context.packageName)
+        val controllers = manager.getActiveSessions(ComponentName(context, MediaNotificationListener::class.java))
+        AppFilterManager.recordSeenPackages(context, controllers.mapNotNull { it.packageName }, context.packageName)
+        NativeSong.select(
+            controllers
+                .filter { AppFilterManager.isPackageAllowed(context, it.packageName, context.packageName) }
+                .mapNotNull(::song),
+            context.packageName
+        )
     } catch (_: SecurityException) { null }
 }
